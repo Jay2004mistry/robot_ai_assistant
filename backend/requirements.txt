@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+pydantic
+edge-tts
+httpx
+python-dotenv
