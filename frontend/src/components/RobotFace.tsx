@@ -42,6 +42,129 @@ export default function RobotFace({ state, expression, onClick }: RobotFaceProps
 
   const glowColor = getGlowColor();
 
+  // State-dependent movement animation helper functions
+  const getLeftArmAnimation = () => {
+    if (isAnimating) {
+      return {
+        rotate: leftArmRotate,
+        transition: { type: "spring" as const, stiffness: 140, damping: 12 }
+      };
+    }
+    
+    switch (state) {
+      case "speaking":
+        return {
+          rotate: [-15, -35, -15],
+          transition: { duration: 1.2, repeat: Infinity, ease: "easeInOut" as const }
+        };
+      case "listening":
+        return {
+          rotate: [-25, -20, -25],
+          transition: { duration: 2.0, repeat: Infinity, ease: "easeInOut" as const }
+        };
+      case "thinking":
+        return {
+          rotate: [-10],
+          transition: { duration: 0.5 }
+        };
+      case "idle":
+      default:
+        return {
+          rotate: [-5, 5, -5],
+          transition: { duration: 4.0, repeat: Infinity, ease: "easeInOut" as const }
+        };
+    }
+  };
+
+  const getRightArmAnimation = () => {
+    if (isAnimating) {
+      return {
+        rotate: rightArmRotate,
+        transition: { type: "spring" as const, stiffness: 140, damping: 12 }
+      };
+    }
+    
+    switch (state) {
+      case "speaking":
+        return {
+          rotate: [15, 35, 15],
+          transition: { duration: 1.0, repeat: Infinity, ease: "easeInOut" as const, delay: 0.2 }
+        };
+      case "listening":
+        return {
+          rotate: [25, 20, 25],
+          transition: { duration: 2.0, repeat: Infinity, ease: "easeInOut" as const }
+        };
+      case "thinking":
+        return {
+          rotate: [110, 120, 110],
+          transition: { duration: 1.5, repeat: Infinity, ease: "easeInOut" as const }
+        };
+      case "idle":
+      default:
+        return {
+          rotate: [5, -5, 5],
+          transition: { duration: 4.0, repeat: Infinity, ease: "easeInOut" as const }
+        };
+    }
+  };
+
+  const getLeftLegAnimation = () => {
+    if (isAnimating) {
+      return {
+        rotate: leftLegRotate,
+        transition: { type: "spring" as const, stiffness: 120, damping: 10 }
+      };
+    }
+    
+    switch (state) {
+      case "speaking":
+        return {
+          rotate: [-5, 5, -5],
+          transition: { duration: 1.5, repeat: Infinity, ease: "easeInOut" as const }
+        };
+      case "thinking":
+        return {
+          rotate: [5, -5, 5],
+          transition: { duration: 2.0, repeat: Infinity, ease: "easeInOut" as const }
+        };
+      case "idle":
+      default:
+        return {
+          rotate: [0, -3, 0],
+          transition: { duration: 6.0, repeat: Infinity, ease: "easeInOut" as const }
+        };
+    }
+  };
+
+  const getRightLegAnimation = () => {
+    if (isAnimating) {
+      return {
+        rotate: rightLegRotate,
+        transition: { type: "spring" as const, stiffness: 120, damping: 10 }
+      };
+    }
+    
+    switch (state) {
+      case "speaking":
+        return {
+          rotate: [5, -5, 5],
+          transition: { duration: 1.5, repeat: Infinity, ease: "easeInOut" as const, delay: 0.3 }
+        };
+      case "thinking":
+        return {
+          rotate: [-5, 5, -5],
+          transition: { duration: 2.0, repeat: Infinity, ease: "easeInOut" as const }
+        };
+      case "idle":
+      default:
+        return {
+          rotate: [0, 3, 0],
+          transition: { duration: 6.0, repeat: Infinity, ease: "easeInOut" as const }
+        };
+    }
+  };
+
   // Trigger a random physics-like animation on the robot's limbs
   const triggerRandomMovement = () => {
     if (isAnimating) return; // Prevent overlapping click triggers
@@ -200,6 +323,13 @@ export default function RobotFace({ state, expression, onClick }: RobotFaceProps
           variants={eyeVariants}
           style={{ originX: "65px", originY: "75px" }}
         >
+          {/* Eyelashes */}
+          <g stroke={glowColor} strokeWidth="3" strokeLinecap="round" filter="url(#neon-glow)">
+            <line x1="57" y1="68" x2="45" y2="60" />
+            <line x1="63" y1="65" x2="54" y2="54" />
+            <line x1="70" y1="66" x2="65" y2="54" />
+          </g>
+
           {currentExpression === "happy" ? (
             // Happy eyes: ^ ^
             <path
@@ -259,6 +389,13 @@ export default function RobotFace({ state, expression, onClick }: RobotFaceProps
           variants={eyeVariants}
           style={{ originX: "135px", originY: "75px" }}
         >
+          {/* Eyelashes */}
+          <g stroke={glowColor} strokeWidth="3" strokeLinecap="round" filter="url(#neon-glow)">
+            <line x1="143" y1="68" x2="155" y2="60" />
+            <line x1="137" y1="65" x2="146" y2="54" />
+            <line x1="130" y1="66" x2="135" y2="54" />
+          </g>
+
           {currentExpression === "happy" ? (
             // Happy eyes: ^ ^
             <path
@@ -546,8 +683,7 @@ export default function RobotFace({ state, expression, onClick }: RobotFaceProps
         >
           {/* 1. Left Leg */}
           <motion.g
-            animate={{ rotate: leftLegRotate }}
-            transition={{ type: "spring", stiffness: 120, damping: 10 }}
+            animate={getLeftLegAnimation()}
             style={{ originX: "78px", originY: "255px" }}
           >
             <rect x="70" y="252" width="16" height="42" rx="8" fill="#374151" stroke="#4b5563" strokeWidth="2.5" />
@@ -559,8 +695,7 @@ export default function RobotFace({ state, expression, onClick }: RobotFaceProps
 
           {/* 2. Right Leg */}
           <motion.g
-            animate={{ rotate: rightLegRotate }}
-            transition={{ type: "spring", stiffness: 120, damping: 10 }}
+            animate={getRightLegAnimation()}
             style={{ originX: "122px", originY: "255px" }}
           >
             <rect x="114" y="252" width="16" height="42" rx="8" fill="#374151" stroke="#4b5563" strokeWidth="2.5" />
@@ -572,8 +707,7 @@ export default function RobotFace({ state, expression, onClick }: RobotFaceProps
 
           {/* 3. Left Arm */}
           <motion.g
-            animate={{ rotate: leftArmRotate }}
-            transition={{ type: "spring", stiffness: 140, damping: 12 }}
+            animate={getLeftArmAnimation()}
             style={{ originX: "48px", originY: "190px" }}
           >
             {/* Shoulder */}
@@ -586,8 +720,7 @@ export default function RobotFace({ state, expression, onClick }: RobotFaceProps
 
           {/* 4. Right Arm */}
           <motion.g
-            animate={{ rotate: rightArmRotate }}
-            transition={{ type: "spring", stiffness: 140, damping: 12 }}
+            animate={getRightArmAnimation()}
             style={{ originX: "152px", originY: "190px" }}
           >
             {/* Shoulder */}
@@ -606,6 +739,17 @@ export default function RobotFace({ state, expression, onClick }: RobotFaceProps
 
           {/* 6. Torso / Body */}
           <rect x="54" y="172" width="92" height="84" rx="22" fill="#1f2937" stroke="#4b5563" strokeWidth="4.5" />
+
+          {/* Cute Flared Skirt/Dress */}
+          <path
+            d="M 64 218 L 42 258 C 42 265, 158 265, 158 258 L 136 218 Z"
+            fill="#2c3545"
+            stroke="#ec4899"
+            strokeWidth="3.5"
+            filter="url(#neon-glow)"
+          />
+          {/* Cute Belt / Sash on the dress waist */}
+          <rect x="62" y="214" width="76" height="6" rx="3" fill="#f43f5e" />
           
           {/* Glowing Arc Reactor-style status light in the chest */}
           <circle cx="100" cy="214" r="16" fill="#0b0f19" stroke="#374151" strokeWidth="2.5" />
@@ -709,6 +853,16 @@ export default function RobotFace({ state, expression, onClick }: RobotFaceProps
             strokeWidth="4"
           />
 
+          {/* Cute Lady Hair Bow */}
+          <g className="hair-bow" transform="translate(48, 38)">
+            {/* Left wing */}
+            <path d="M 0 0 L -18 -12 L -18 6 Z" fill="#ec4899" stroke="#f43f5e" strokeWidth="1.5" filter="url(#neon-glow)" />
+            {/* Right wing */}
+            <path d="M 0 0 L 18 -12 L 18 6 Z" fill="#ec4899" stroke="#f43f5e" strokeWidth="1.5" filter="url(#neon-glow)" />
+            {/* Center knot */}
+            <circle cx="0" cy="-3" r="5.5" fill="#f43f5e" stroke="#db2777" strokeWidth="1.5" />
+          </g>
+
           {/* Inner Screen Screen Glass */}
           <rect
             x="33"
@@ -727,6 +881,10 @@ export default function RobotFace({ state, expression, onClick }: RobotFaceProps
 
           {/* Screen pattern overlay */}
           <rect x="33" y="48" width="134" height="104" rx="24" fill="url(#screen-pattern)" />
+
+          {/* Cute Cheek Blush (soft pink glow on the sides) */}
+          <ellipse cx="54" cy="102" rx="9" ry="4.5" fill="#f43f5e" opacity="0.4" filter="url(#neon-glow)" />
+          <ellipse cx="146" cy="102" rx="9" ry="4.5" fill="#f43f5e" opacity="0.4" filter="url(#neon-glow)" />
 
           {/* Render Eye Component */}
           {renderEyes()}

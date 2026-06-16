@@ -138,7 +138,7 @@ async def api_query(request: QueryRequest):
     if not request.query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
     try:
-        ans, lang_code = qa_engine.answer_query(request.query, lang_pref=request.lang)
+        ans, lang_code, redirect = qa_engine.answer_query(request.query, lang_pref=request.lang)
         
         # Generate base64 audio response via edge-tts
         audio_b64 = None
@@ -147,7 +147,7 @@ async def api_query(request: QueryRequest):
             audio_b64 = await generate_speech_b64(clean_text, lang_code)
             
         explicit_switch = qa_engine.check_language_switch_request(request.query) is not None
-        return {"answer": ans, "audio": audio_b64, "lang": lang_code, "explicit_switch": explicit_switch}
+        return {"answer": ans, "audio": audio_b64, "lang": lang_code, "explicit_switch": explicit_switch, "redirect": redirect}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -162,7 +162,7 @@ async def api_voice_query(request: VoiceQueryRequest):
     
     try:
         # 1. Coordinate query using the chatbot's official RAG/Groq qa_engine.py
-        ans, detected_lang = qa_engine.answer_query(request.query, filepath="knowledge_base.json", lang_pref=request.lang)
+        ans, detected_lang, redirect = qa_engine.answer_query(request.query, filepath="knowledge_base.json", lang_pref=request.lang)
         
         # 2. Dynamically classify the robot expression state
         expression = classify_expression(ans)
@@ -176,7 +176,8 @@ async def api_voice_query(request: VoiceQueryRequest):
         return {
             "text": ans,
             "audio": audio_b64,
-            "expression": expression
+            "expression": expression,
+            "redirect": redirect
         }
         
     except Exception as e:

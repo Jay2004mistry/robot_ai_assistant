@@ -7,15 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 const LANGUAGES = [
   { code: "en", locale: "en-US", name: "English (US)" },
   { code: "hi", locale: "hi-IN", name: "Hindi (हिंदी)" },
-  { code: "gu", locale: "gu-IN", name: "Gujarati (ગુજરાતી)" },
-  { code: "es", locale: "es-ES", name: "Spanish (Español)" },
-  { code: "fr", locale: "fr-FR", name: "French (Français)" },
-  { code: "de", locale: "de-DE", name: "German (Deutsch)" },
-  { code: "ja", locale: "ja-JP", name: "Japanese (日本語)" },
-  { code: "zh", locale: "zh-CN", name: "Chinese (中文)" },
-  { code: "ar", locale: "ar-SA", name: "Arabic (العربية)" },
-  { code: "ru", locale: "ru-RU", name: "Russian (Русский)" },
-  { code: "pt", locale: "pt-PT", name: "Portuguese (Português)" }
+  { code: "gu", locale: "gu-IN", name: "Gujarati (ગુજરાતી)" }
 ];
 
 export default function App() {
@@ -33,6 +25,7 @@ export default function App() {
   const [isLangOpen, setIsLangOpen] = useState(false);
 
   const recognitionRef = useRef<any>(null);
+  const isRecognitionActiveRef = useRef(false);
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
@@ -77,8 +70,13 @@ export default function App() {
       return;
     }
 
-    if (isListening) {
-      rec.stop();
+    if (isListening || isRecognitionActiveRef.current) {
+      try {
+        rec.stop();
+      } catch (err) {
+        console.warn("Speech recognition stop warning:", err);
+      }
+      isRecognitionActiveRef.current = false;
       setIsListening(false);
       return;
     }
@@ -88,6 +86,7 @@ export default function App() {
     setRobotState("listening");
     setExpression("neutral");
     setIsListening(true);
+    isRecognitionActiveRef.current = true;
     setUserTranscript("");
     userTranscriptRef.current = "";
     setErrorMsg(null);
@@ -120,11 +119,13 @@ export default function App() {
       } else {
         setErrorMsg(`Recognition error: ${event.error}`);
       }
+      isRecognitionActiveRef.current = false;
       setIsListening(false);
       setRobotState("idle");
     };
 
     rec.onend = () => {
+      isRecognitionActiveRef.current = false;
       setIsListening(false);
       // Retrieve transcript and send to backend
       const transcriptVal = userTranscriptRef.current.trim();
@@ -135,7 +136,13 @@ export default function App() {
       }
     };
 
-    rec.start();
+    try {
+      rec.start();
+    } catch (err) {
+      console.warn("Speech recognition start warning:", err);
+      isRecognitionActiveRef.current = true;
+      setIsListening(true);
+    }
   };
 
   // Submit text query to FastAPI backend
@@ -166,6 +173,7 @@ export default function App() {
       const textResponse = data.text;
       const expressionResponse = data.expression || "neutral";
       const audioB64 = data.audio;
+      const redirect = data.redirect;
 
       setBotSpeech(textResponse);
       setExpression(expressionResponse as RobotExpression);
@@ -176,6 +184,12 @@ export default function App() {
         // Fallback if no audio generated
         setRobotState("idle");
         setExpression("neutral");
+      }
+
+      if (redirect) {
+        setTimeout(() => {
+          window.location.href = redirect;
+        }, 1500);
       }
 
     } catch (err: any) {
@@ -229,9 +243,16 @@ export default function App() {
     setIsBubbleVisible(false);
     setIsLangOpen(false);
     stopAudio();
-    if (isListening) {
+    if (isListening || isRecognitionActiveRef.current) {
       const rec = recognitionRef.current;
-      if (rec) rec.stop();
+      if (rec) {
+        try {
+          rec.stop();
+        } catch (err) {
+          console.warn("Speech recognition stop warning:", err);
+        }
+      }
+      isRecognitionActiveRef.current = false;
       setIsListening(false);
     }
     setRobotState("idle");

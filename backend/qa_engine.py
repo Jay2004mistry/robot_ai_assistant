@@ -575,33 +575,47 @@ def fallback_qa(query, kb, lang_pref=None):
     query_clean = query.lower().strip()
     
     # Precise high-fidelity conversational routing to prevent unrelated vector matches
-    # 1. Greetings
-    greeting_patterns = [r'\bhello\b', r'\bhi\b', r'\bhey\b', r'\bgreetings\b', r'\bgood\s+morning\b', r'\bgood\s+afternoon\b', r'\bgood\s+evening\b']
+    # 1. Greetings (supports English, Hindi, and Gujarati scripts/transliterations)
+    greeting_patterns = [
+        r'\bhello\b', r'\bhi\b', r'\bhey\b', r'\bgreetings\b', r'\bgood\s+morning\b', r'\bgood\s+afternoon\b', r'\bgood\s+evening\b',
+        r'\bnamaste\b', r'\bnamaskar\b', r'\bpranam\b',
+        r'નમસ્તે', r'પ્રણામ', r'नमस्ते', r'प्रणाम'
+    ]
     # 2. Identity & Name
     identity_patterns = [
         r'\bwho\s+are\s+you\b', r'\bwhat\s+is\s+your\s+name\b', r'\byour\s+name\b',
         r'\bwho\s+made\s+you\b', r'\bwho\s+created\s+you\b', r'\bwho\s+developed\s+you\b',
-        r'\bintroduce\s+yourself\b'
+        r'\bintroduce\s+yourself\b',
+        r'\bkaun\s+ho\b', r'\btum\s+kaun\b', r'\btame\s+kon\b', r'\bnaam\s+kya\b', r'\bnaam\s+shu\b', r'\bapna\s+parichay\b', r'\btamaro\s+parichay\b',
+        r'કોણ\s+છો', r'કોણ\s+છે', r'તમારું\s+નામ', r'નામ\s+શું', r'कौन\s+हो', r'आपका\s+नाम', r'नाम\s+क्या'
     ]
     # 3. How are you
     how_are_you_patterns = [
         r'\bhow\s+are\s+you\b', r'\bhow\s+do\s+you\s+do\b', r'\bhope\s+you\s+are\s+well\b',
-        r'\bhow\'s\s+it\s+going\b', r'\bdoing\s+well\b'
+        r'\bhow\'s\s+it\s+going\b', r'\bdoing\s+well\b',
+        r'\bkem\s+chho\b', r'\bkem\s+cho\b', r'\bkaise\s+ho\b', r'\bkaise\s+hain\b', r'\bkya\s+haal\b', r'\bshu\s+haal\b',
+        r'કેમ\s+છો', r'કેમ\s+છે', r'કેવી\s+રીતે', r'कैसे\s+हो', r'कैसे\s+हैं', r'क्या\s+हाल'
     ]
     # 4. Capabilities / What can you do
     capabilities_patterns = [
         r'\bwhat\s+do\s+you\s+do\b', r'\bwhat\s+can\s+you\s+do\b', r'\byour\s+capabilities\b',
-        r'\bhow\s+can\s+you\s+help\b', r'\bhelp\s+me\b', r'\bwhat\s+are\s+you\s+capable\s+of\b'
+        r'\bhow\s+can\s+you\s+help\b', r'\bhelp\s+me\b', r'\bwhat\s+are\s+you\s+capable\s+of\b',
+        r'\bkam\s+kya\b', r'\bshu\s+kari\b', r'\bkya\s+kar\b', r'\bmadad\b', r'\bsahaya\b',
+        r'શું\s+કરી\s+શકો', r'ક્ષમતા', r'મદદ', r'क्या\s+कर\s+सकते', r'मदद', r'सहायता'
     ]
     # 5. Thanks / Gratitude
     thanks_patterns = [
         r'\bthank\s+you\b', r'\bthanks\b', r'\bappreciate\s+it\b', r'\bthankful\b',
-        r'\bgreat\s+help\b', r'\bawesome\b', r'\bgood\s+job\b'
+        r'\bgreat\s+help\b', r'\bawesome\b', r'\bgood\s+job\b',
+        r'\bdhanyavad\b', r'\bshukriya\b', r'\babhar\b', r'\bkhub\s+saras\b', r'\bbahut\s+achha\b',
+        r'આભાર', r'ધન્યવાદ', r'ખુબ\s+સરસ', r'धन्यवाद', r'शुक्रिया', r'बहुत\s+बढ़िया'
     ]
     # 6. Goodbye / Farewell
     goodbye_patterns = [
         r'\bbye\b', r'\bgoodbye\b', r'\bsee\s+you\b', r'\btalk\s+to\s+you\s+later\b',
-        r'\bexit\b', r'\bquit\b'
+        r'\bexit\b', r'\bquit\b',
+        r'\balvida\b', r'\bphir\s+milenge\b', r'\bfari\s+malishu\b', r'\bchalo\s+aavjo\b', r'\baavjo\b',
+        r'આવજો', r'ફરી\s+મળીશું', r'अलविदा', r'फिर\s+मिलेंगे'
     ]
 
     # Handle language-specific offline responses
@@ -886,6 +900,83 @@ def detect_language_simple(text):
         return "ko"
     return "en"
 
+def check_navigation_intent(query: str):
+    """
+    Checks if the user wants to navigate to a page.
+    Supports English, Hindi, and Gujarati navigation triggers.
+    Returns the relative route if a match is found, else None.
+    """
+    if not query:
+        return None
+        
+    q = query.lower().strip()
+    
+    # 1. Services Page Mapping
+    services_keywords = [
+        "service", "services", "what do you offer", "what you offer", "capabilities",
+        "सेवाओं", "सेवाएं", "सर्विसेज", "કામ", "સેવા", "સેવાઓ", "સર્વિસ"
+    ]
+    if any(word in q for word in services_keywords) and any(action in q for action in ["go", "open", "show", "navigate", "page", "ખોલો", "જાવ", "દેખાડો", "દિખાઓ", "જાઓ"]):
+        return "/our-services"
+        
+    # 2. Career Page Mapping
+    career_keywords = [
+        "career", "careers", "job", "jobs", "vacancy", "vacancies", "hiring", "apply", "work with us", "resume",
+        "करियर", "नौकरी", "भर्ती", "રોજગાર", "નોકરી", "ભરતી", "કરિયર"
+    ]
+    if any(word in q for word in career_keywords):
+        return "/career"
+        
+    # 3. Contact Page Mapping
+    contact_keywords = [
+        "contact", "phone", "email", "address", "location", "reach us", "get in touch", "office", "headquarter",
+        "संपर्क", "कांटेक्ट", "सम्पર્ક", "કોન્ટેક્ટ"
+    ]
+    if any(word in q for word in contact_keywords) and any(action in q for action in ["go", "open", "show", "navigate", "page", "ખોલો", "જાવ", "દેખાડો", "દિખાઓ", "જાઓ"]):
+        return "/contact-us"
+        
+    # 4. FAQ Page Mapping
+    faq_keywords = [
+        "faq", "faqs", "question", "questions", "queries", "common questions",
+        "સવાલ", "પ્રશ્ન", "सवाल", "प्रश्न"
+    ]
+    if any(word in q for word in faq_keywords) and any(action in q for action in ["go", "open", "show", "navigate", "page", "ખોલો", "જાવ", "દેખાડો", "દિખાઓ", "જાઓ"]):
+        return "/faq"
+        
+    # 5. How We Work Mapping
+    how_we_work_keywords = [
+        "how we work", "how you work", "methodology", "process", "workflow", "steps",
+        "પદ્ધતિ", "કામ કરવાની પદ્ધતિ", "काम करने की पद्धति", "तरीका"
+    ]
+    if any(word in q for word in how_we_work_keywords) and any(action in q for action in ["go", "open", "show", "navigate", "page", "ખોલો", "જાવ", "દેખાડો", "દિખાઓ", "જાઓ"]):
+        return "/how-we-work"
+        
+    # 6. Who We Are Mapping
+    who_we_are_keywords = [
+        "who we are", "who you are", "about company", "about us", "about vihil",
+        "વિશે", "કંપની વિશે", "બારે", "कंपनी के बारे"
+    ]
+    if any(word in q for word in who_we_are_keywords) and any(action in q for action in ["go", "open", "show", "navigate", "page", "ખોલો", "જાવ", "દેખાડો", "દિખાઓ", "જાઓ"]):
+        return "/who-we-are"
+        
+    # 7. Schedule a Call Mapping
+    schedule_keywords = [
+        "schedule", "book", "meeting", "google meet", "zoom", "call", "schedule a call", "book a call", "appointment",
+        "બુક", "મીટિંગ", "કોલ", "अपॉइंटमेंट", "कॉल बुक", "कॉल शेड्यूल"
+    ]
+    if any(word in q for word in schedule_keywords) and any(action in q for action in ["go", "open", "show", "navigate", "page", "ખોલો", "જાવ", "દેખાડો", "દિખાઓ", "જાઓ"]):
+        return "/schedule-a-call"
+        
+    # 8. Home Page Mapping
+    home_keywords = [
+        "home", "homepage", "main page", "start page",
+        "હોમ", "मुख्य पेज"
+    ]
+    if any(word in q for word in home_keywords) and any(action in q for action in ["go", "open", "show", "navigate", "page", "ખોલો", "જાવ", "દેખાડો", "દિખાઓ", "જાઓ"]):
+        return "/home"
+        
+    return None
+
 def query_groq_api(query, kb, api_key, stream=False, lang_pref=None):
     """
     Direct REST API client for Groq to support Llama 3 models.
@@ -931,6 +1022,7 @@ def query_groq_api(query, kb, api_key, stream=False, lang_pref=None):
         "- If the user asks for team members, services, or FAQs, YOU MUST list each one clearly with bullet points.\n"
         "- For company questions not covered by the context, politely guide them to contact vihil3010@gmail.com or call +91 7016421339.\n"
         "- For completely off-topic questions (math, general chat), answer helpfully as a smart AI and tie back to how Vihil InfoTech can help build digital solutions.\n"
+        "- NAVIGATION INTENT RULE: If the user explicitly asks to navigate, go to, show, or open a specific page on the website (e.g. Services, Contact, Careers, FAQ, About/Who we are, Schedule a call, Process/How we work, Home), you must identify the target route from these options and return it in the 'redirect' field of the JSON (e.g. '/our-services', '/contact-us', '/career', '/faq', '/who-we-are', '/schedule-a-call', '/how-we-work', '/home'). If no navigation is requested by the user, set 'redirect' to null.\n"
     )
     
     if lang_pref and lang_pref.lower() != "auto":
@@ -938,9 +1030,10 @@ def query_groq_api(query, kb, api_key, stream=False, lang_pref=None):
         
     if not stream:
         system_instruction += (
-            "\nResponse format MUST be a JSON object with two fields:\n"
+            "\nResponse format MUST be a JSON object with three fields:\n"
             "1. 'answer': The actual text response.\n"
-            "2. 'lang_code': The standard 2-letter language code (e.g. 'en', 'hi', 'gu', 'es', 'fr', 'ja', 'ru', etc.) of the generated answer."
+            "2. 'redirect': The relative page route to redirect the user to (e.g., '/our-services', '/contact-us', '/career', etc.), or null if no redirection is requested.\n"
+            "3. 'lang_code': The standard 2-letter language code (e.g. 'en', 'hi', 'gu', 'es', 'fr', 'ja', 'ru', etc.) of the generated answer."
         )
     else:
         system_instruction += "\nGenerate your response in standard Markdown format. Stream the response directly."
@@ -1014,11 +1107,11 @@ def answer_query(query, filepath="knowledge_base.json", lang_pref=None):
         # If it is a pure language switch command, return immediate confirmation
         if is_pure_language_switch(query):
             if requested_lang == "gu":
-                return "હા, હવે હું તમારી સાથે ગુજરાતીમાં વાત કરીશ. હું ગુજરાતીમાં બોલી શકું છું! હું તમારી શું મદદ કરી શકું?", "gu"
+                return "હા, હવે હું તમારી સાથે ગુજરાતીમાં વાત કરીશ. હું ગુજરાતીમાં બોલી શકું છું! હું તમારી શું મદદ કરી શકું?", "gu", None
             elif requested_lang == "hi":
-                return "हाँ, अब मैं आपसे हिंदी में बात करूँगा। मैं हिंदी में बोल सकता हूँ! मैं आपकी क्या मदद कर सकता हूँ?", "hi"
+                return "हाँ, अब मैं आपसे हिंदी में बात करूँगा। मैं हिंदी में बोल सकता हूँ! मैं आपकी क्या मदद कर सकता हूँ?", "hi", None
             elif requested_lang == "en":
-                return "Sure, I will speak with you in English now! How can I help you today?", "en"
+                return "Sure, I will speak with you in English now! How can I help you today?", "en", None
     elif not lang_pref or lang_pref.lower() == "auto":
         detected_lang = detect_language_from_text(query)
         if detected_lang != "en":
@@ -1035,19 +1128,26 @@ def answer_query(query, filepath="knowledge_base.json", lang_pref=None):
                     res_json = json.loads(content_str)
                     ans = res_json.get("answer", "")
                     lang_code = res_json.get("lang_code", "en")
-                    return ans, lang_code
+                    redirect = res_json.get("redirect", None)
+                    return ans, lang_code, redirect
                 except Exception:
-                    return content_str, detect_language_simple(content_str)
+                    redirect = check_navigation_intent(query)
+                    return content_str, detect_language_simple(content_str), redirect
         except Exception as e:
             if "429" in str(e):
-                return "⚠️ **Groq API Rate Limit Reached**\nYou have sent too many requests and hit the free-tier limit for the Groq API. Please wait a moment for the rate limit to reset before trying again, or use a new Groq API key.", "en"
+                return "⚠️ **Groq API Rate Limit Reached**\nYou have sent too many requests and hit the free-tier limit for the Groq API. Please wait a moment for the rate limit to reset before trying again, or use a new Groq API key.", "en", None
             print(f"Groq API Error: {e}", file=sys.stderr)
             
     ans = fallback_qa(query, kb, lang_pref=lang_pref)
+    final_lang = lang_pref if (lang_pref and lang_pref.lower() not in ["en", "auto"]) else None
     if lang_pref and lang_pref.lower() not in ["en", "auto"]:
         if not contains_indic_scripts(ans):
             ans = translate_to_target_lang(ans, lang_pref)
-    return ans, detect_language_simple(ans)
+    if not final_lang:
+        final_lang = detect_language_simple(ans)
+    
+    redirect = check_navigation_intent(query)
+    return ans, final_lang, redirect
 
 def stream_answer_query(query, filepath="knowledge_base.json", lang_pref=None):
     """
