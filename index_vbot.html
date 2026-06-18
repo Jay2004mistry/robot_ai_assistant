@@ -1,0 +1,1726 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vihil InfoTech – Virtual Presenter</title>
+    <link rel="icon" href="data:," />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #030712;
+            color: #f3f4f6;
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+            user-select: none;
+        }
+
+        /* Walk animations – same as before */
+        .shadow-walk-in {
+            animation: shadow-forward 2.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        }
+
+        .shadow-walk-out {
+            animation: shadow-backward 2.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        }
+
+        @keyframes shadow-forward {
+            0% {
+                transform: translate(-50%, 0) scale(0.15);
+                opacity: 0;
+            }
+
+            100% {
+                transform: translate(-50%, 0) scale(1.0);
+                opacity: 0.55;
+            }
+        }
+
+        @keyframes shadow-backward {
+            0% {
+                transform: translate(-50%, 0) scale(1.0);
+                opacity: 0.55;
+            }
+
+            100% {
+                transform: translate(-50%, 0) scale(0.15);
+                opacity: 0;
+            }
+        }
+
+        .walk-in-active {
+            animation: walk-forward-animation 2.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        }
+
+        .walk-out-active {
+            animation: walk-back-animation 2.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        }
+
+        @keyframes walk-forward-animation {
+            0% {
+                transform: scale(0.15) translateY(250px);
+                opacity: 0;
+            }
+
+            15% {
+                opacity: 1;
+            }
+
+            100% {
+                transform: scale(1.0) translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes walk-back-animation {
+            0% {
+                transform: scale(1.0) translateY(0);
+                opacity: 1;
+            }
+
+            85% {
+                opacity: 1;
+            }
+
+            100% {
+                transform: scale(0.15) translateY(250px);
+                opacity: 0;
+            }
+        }
+
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        .glow-ambient {
+            animation: pulse-glow-ambient 4s ease-in-out infinite;
+        }
+
+        @keyframes pulse-glow-ambient {
+
+            0%,
+            100% {
+                opacity: 0.15;
+                transform: scale(1.0);
+            }
+
+            50% {
+                opacity: 0.25;
+                transform: scale(1.15);
+            }
+        }
+
+        /* ----- New Robot Animations (adjusted for realistic limbs) ----- */
+        @keyframes float-body {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(-6px);
+            }
+        }
+
+        .robot-float-group {
+            animation: float-body 4s ease-in-out infinite;
+        }
+
+        /* Arms – pivot points updated for the new SVG */
+        #robot-left-arm {
+            transform-origin: 48px 190px;
+            animation: idle-left-arm 4s ease-in-out infinite;
+            transition: transform 0.3s ease;
+        }
+
+        #robot-right-arm {
+            transform-origin: 152px 190px;
+            animation: idle-right-arm 4s ease-in-out infinite;
+            transition: transform 0.3s ease;
+        }
+
+        @keyframes idle-left-arm {
+
+            0%,
+            100% {
+                transform: rotate(-3deg);
+            }
+
+            50% {
+                transform: rotate(3deg);
+            }
+        }
+
+        @keyframes idle-right-arm {
+
+            0%,
+            100% {
+                transform: rotate(3deg);
+            }
+
+            50% {
+                transform: rotate(-3deg);
+            }
+        }
+
+        .speaking #robot-left-arm {
+            animation: speaking-left-arm 1.2s ease-in-out infinite;
+        }
+
+        .speaking #robot-right-arm {
+            animation: speaking-right-arm 1s ease-in-out infinite;
+        }
+
+        @keyframes speaking-left-arm {
+
+            0%,
+            100% {
+                transform: rotate(-12deg);
+            }
+
+            50% {
+                transform: rotate(-30deg);
+            }
+        }
+
+        @keyframes speaking-right-arm {
+
+            0%,
+            100% {
+                transform: rotate(12deg);
+            }
+
+            50% {
+                transform: rotate(30deg);
+            }
+        }
+
+        /* Legs */
+        #robot-left-leg {
+            transform-origin: 78px 260px;
+            animation: idle-left-leg 6s ease-in-out infinite;
+        }
+
+        #robot-right-leg {
+            transform-origin: 122px 260px;
+            animation: idle-right-leg 6s ease-in-out infinite;
+        }
+
+        @keyframes idle-left-leg {
+
+            0%,
+            100% {
+                transform: rotate(0deg);
+            }
+
+            50% {
+                transform: rotate(-2deg);
+            }
+        }
+
+        @keyframes idle-right-leg {
+
+            0%,
+            100% {
+                transform: rotate(0deg);
+            }
+
+            50% {
+                transform: rotate(2deg);
+            }
+        }
+
+        /* Eye blink – using clip-path or scale; we keep as circle scale but our new eyes are arcs, we can skip blink */
+        .robot-eye {
+            transform-origin: 65px 75px;
+            animation: eye-blink 4s ease-in-out infinite;
+        }
+
+        .robot-eye-right {
+            transform-origin: 135px 75px;
+            animation: eye-blink 4s ease-in-out infinite;
+        }
+
+        @keyframes eye-blink {
+
+            0%,
+            90%,
+            100% {
+                transform: scaleY(1);
+            }
+
+            95% {
+                transform: scaleY(0.1);
+            }
+        }
+
+        .glowing-core {
+            transform-origin: 100px 215px;
+            animation: pulse-light 2s ease-in-out infinite;
+        }
+
+        .glowing-antenna {
+            transform-origin: 100px 18px;
+            animation: pulse-light 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse-light {
+
+            0%,
+            100% {
+                opacity: 0.7;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 1;
+                transform: scale(1.05);
+            }
+        }
+
+        /* EQ bars for speaking (same as before) */
+        @keyframes eq-pulse {
+
+            0%,
+            100% {
+                transform: scaleY(0.7);
+            }
+
+            50% {
+                transform: scaleY(1.2);
+            }
+        }
+
+        .eq-bar {
+            transform-origin: bottom;
+            animation: eq-pulse 0.7s ease-in-out infinite;
+        }
+
+        .eq-bar-1 {
+            transform-origin: 60px 115px;
+            animation-duration: 0.65s;
+        }
+
+        .eq-bar-2 {
+            transform-origin: 70px 115px;
+            animation-duration: 0.85s;
+        }
+
+        .eq-bar-3 {
+            transform-origin: 80px 115px;
+            animation-duration: 0.6s;
+        }
+
+        .eq-bar-4 {
+            transform-origin: 90px 115px;
+            animation-duration: 0.9s;
+        }
+
+        .eq-bar-5 {
+            transform-origin: 100px 115px;
+            animation-duration: 0.7s;
+        }
+
+        .eq-bar-6 {
+            transform-origin: 110px 115px;
+            animation-duration: 0.8s;
+        }
+
+        .eq-bar-7 {
+            transform-origin: 120px 115px;
+            animation-duration: 0.62s;
+        }
+
+        .eq-bar-8 {
+            transform-origin: 130px 115px;
+            animation-duration: 0.88s;
+        }
+
+        .eq-bar-9 {
+            transform-origin: 140px 115px;
+            animation-duration: 0.68s;
+        }
+
+        /* Random movements (keep same class names but adjust if needed) */
+        .wave-left-arm {
+            animation: anim-wave-left 1.2s ease-in-out !important;
+        }
+
+        @keyframes anim-wave-left {
+
+            0%,
+            100% {
+                transform: rotate(-3deg);
+            }
+
+            25%,
+            75% {
+                transform: rotate(-130deg);
+            }
+
+            50% {
+                transform: rotate(-90deg);
+            }
+        }
+
+        .wave-right-arm {
+            animation: anim-wave-right 1.2s ease-in-out !important;
+        }
+
+        @keyframes anim-wave-right {
+
+            0%,
+            100% {
+                transform: rotate(3deg);
+            }
+
+            25%,
+            75% {
+                transform: rotate(130deg);
+            }
+
+            50% {
+                transform: rotate(90deg);
+            }
+        }
+
+        .double-arm-jump-body {
+            animation: anim-jump-body 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94) !important;
+        }
+
+        @keyframes anim-jump-body {
+
+            0%,
+            100% {
+                transform: translateY(0);
+            }
+
+            30%,
+            70% {
+                transform: translateY(-25px);
+            }
+        }
+
+        .double-arm-jump-left-arm {
+            animation: anim-jump-left-arm 0.9s ease-in-out !important;
+        }
+
+        @keyframes anim-jump-left-arm {
+
+            0%,
+            100% {
+                transform: rotate(-3deg);
+            }
+
+            30%,
+            70% {
+                transform: rotate(-145deg);
+            }
+        }
+
+        .double-arm-jump-right-arm {
+            animation: anim-jump-right-arm 0.9s ease-in-out !important;
+        }
+
+        @keyframes anim-jump-right-arm {
+
+            0%,
+            100% {
+                transform: rotate(3deg);
+            }
+
+            30%,
+            70% {
+                transform: rotate(145deg);
+            }
+        }
+
+        .kick-left-leg {
+            animation: anim-kick-left 0.7s ease-in-out !important;
+        }
+
+        @keyframes anim-kick-left {
+
+            0%,
+            100% {
+                transform: rotate(0deg);
+            }
+
+            50% {
+                transform: rotate(-40deg);
+            }
+        }
+
+        .kick-right-leg {
+            animation: anim-kick-right 0.7s ease-in-out !important;
+        }
+
+        @keyframes anim-kick-right {
+
+            0%,
+            100% {
+                transform: rotate(0deg);
+            }
+
+            50% {
+                transform: rotate(40deg);
+            }
+        }
+
+        .happy-dance-body {
+            animation: anim-dance-body 1.2s ease-in-out !important;
+        }
+
+        @keyframes anim-dance-body {
+
+            0%,
+            100% {
+                transform: translateY(0) rotate(0deg);
+            }
+
+            20%,
+            60% {
+                transform: translateY(-8px) rotate(-4deg);
+            }
+
+            40%,
+            80% {
+                transform: translateY(8px) rotate(4deg);
+            }
+        }
+
+        .happy-dance-left-arm {
+            animation: anim-dance-left-arm 1.2s ease-in-out !important;
+        }
+
+        @keyframes anim-dance-left-arm {
+
+            0%,
+            100% {
+                transform: rotate(-3deg);
+            }
+
+            25%,
+            75% {
+                transform: rotate(-55deg);
+            }
+
+            50% {
+                transform: rotate(55deg);
+            }
+        }
+
+        .happy-dance-right-arm {
+            animation: anim-dance-right-arm 1.2s ease-in-out !important;
+        }
+
+        @keyframes anim-dance-right-arm {
+
+            0%,
+            100% {
+                transform: rotate(3deg);
+            }
+
+            25%,
+            75% {
+                transform: rotate(55deg);
+            }
+
+            50% {
+                transform: rotate(-55deg);
+            }
+        }
+
+        .bounce-dot-1 {
+            animation: bounce-dot 0.8s ease-in-out infinite;
+        }
+
+        .bounce-dot-2 {
+            animation: bounce-dot 0.8s ease-in-out infinite 0.25s;
+        }
+
+        .bounce-dot-3 {
+            animation: bounce-dot 0.8s ease-in-out infinite 0.5s;
+        }
+
+        @keyframes bounce-dot {
+
+            0%,
+            100% {
+                transform: translateY(0);
+                opacity: 0.3;
+            }
+
+            50% {
+                transform: translateY(-6px);
+                opacity: 1;
+            }
+        }
+
+        .animate-pulse-recording {
+            transform-origin: 100px 115px;
+            animation: pulse-rec 1.2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-rec {
+
+            0%,
+            100% {
+                transform: scale(0.8);
+                opacity: 0.6;
+            }
+
+            50% {
+                transform: scale(1.4);
+                opacity: 1;
+            }
+        }
+
+        .hidden-element {
+            display: none !important;
+        }
+
+        .cursor-grab {
+            cursor: grab !important;
+            pointer-events: auto !important;
+        }
+
+        .dragging {
+            animation: none !important;
+            cursor: grabbing !important;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen bg-[#030712] text-gray-200 flex flex-col font-sans relative overflow-x-hidden select-none">
+
+    <!-- Ambient glow backgrounds -->
+    <div
+        class="absolute top-0 left-0 right-0 h-[600px] bg-gradient-to-b from-blue-950/20 via-slate-950/0 to-transparent pointer-events-none">
+    </div>
+    <div
+        class="absolute -top-40 -left-40 w-[600px] h-[600px] bg-blue-500/5 rounded-full blur-[140px] pointer-events-none">
+    </div>
+    <div
+        class="absolute -bottom-40 -right-40 w-[600px] h-[600px] bg-cyan-500/5 rounded-full blur-[140px] pointer-events-none">
+    </div>
+
+    <!-- Main descriptive container -->
+    <div id="main-hero"
+        class="flex-1 flex flex-col items-center justify-center p-6 text-center max-w-2xl mx-auto z-10 relative transition-all duration-500">
+        <button id="meet-presenter-btn"
+            class="group relative px-5 py-2.5 bg-gradient-to-r from-rose-600 to-amber-500 rounded-full font-bold text-white text-xs tracking-wider shadow-[0_6px_15px_-3px_rgba(225,29,72,0.4)] hover:shadow-[0_8px_18px_-3px_rgba(245,158,11,0.5)] transition-all duration-300 hover:scale-105 active:scale-95 flex items-center gap-1.5 cursor-pointer pointer-events-auto">
+            <span
+                class="absolute inset-0 w-full h-full rounded-full bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></span>
+            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 fill-current animate-pulse" viewBox="0 0 24 24">
+                <polygon points="6 3 20 12 6 21 6 3" />
+            </svg>
+            <span>Meet Our Presenter</span>
+        </button>
+    </div>
+
+    <!-- --- FLOATING ROBOT CONTAINER --- -->
+    <div id="vbot-widget-container"
+        class="fixed inset-0 z-50 flex flex-col items-center justify-center pointer-events-none hidden opacity-0 transition-all duration-500 bg-slate-950/20 backdrop-blur-[2px]">
+
+        <!-- Speech bubble (subtitle & controls) -->
+        <div id="speech-bubble"
+            class="absolute bottom-10 left-1/2 -translate-x-1/2 bg-slate-950/85 backdrop-blur-xl border border-white/15 rounded-2xl p-5 shadow-2xl flex flex-col gap-2 w-[90%] md:w-[640px] max-w-[calc(100vw-2rem)] select-none pointer-events-auto text-left transition-all duration-300 transform scale-95 opacity-0 z-20">
+
+            <div
+                class="flex items-center justify-between border-b border-white/5 pb-2 text-[10px] font-bold tracking-wider relative z-10">
+                <div class="flex items-center gap-1.5">
+                    <span id="status-light"
+                        class="w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_6px_#f59e0b]"></span>
+                    <span id="status-text" class="text-amber-400">V-BOT STANDBY</span>
+                </div>
+                <div class="flex items-center gap-2 relative">
+                    <div class="relative">
+                        <button id="globe-btn"
+                            class="p-1 rounded bg-white/5 border border-white/5 hover:bg-white/10 active:scale-95 text-gray-400 hover:text-white transition cursor-pointer"
+                            title="Change Language">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10" />
+                                <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+                                <path d="M2 12h20" />
+                            </svg>
+                        </button>
+                        <div id="lang-dropdown-menu"
+                            class="absolute right-0 bottom-8 mt-2 w-36 bg-slate-900 border border-white/10 rounded-lg shadow-xl py-1 z-50 hidden">
+                            <button onclick="event.stopPropagation(); handleLanguageChange('en')"
+                                class="w-full text-left text-xs px-3 py-2 text-gray-300 hover:bg-white/5 hover:text-white font-semibold transition">English</button>
+                            <button onclick="event.stopPropagation(); handleLanguageChange('hi')"
+                                class="w-full text-left text-xs px-3 py-2 text-gray-300 hover:bg-white/5 hover:text-white font-semibold transition">Hindi
+                                (हिंदी)</button>
+                            <button onclick="event.stopPropagation(); handleLanguageChange('gu')"
+                                class="w-full text-left text-xs px-3 py-2 text-gray-300 hover:bg-white/5 hover:text-white font-semibold transition">Gujarati
+                                (ગુજરાતી)</button>
+                        </div>
+                    </div>
+                    <button id="mute-toggle-btn"
+                        class="p-1 rounded bg-white/5 border border-white/5 hover:bg-white/10 active:scale-95 text-gray-400 hover:text-white transition cursor-pointer"
+                        title="Mute Voice">
+                        <svg id="volume-icon" xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5 text-cyan-500"
+                            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 5 6 9H2v6h4l5 4V5Z" />
+                            <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                        </svg>
+                    </button>
+                    <button id="close-widget-btn"
+                        class="p-1 rounded bg-rose-950/20 border border-rose-500/20 hover:border-rose-500/50 active:scale-95 text-rose-400 hover:text-rose-200 transition cursor-pointer"
+                        title="Close Presenter">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 6 6 18M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="text-xs leading-relaxed relative z-10 max-h-[180px] overflow-y-auto pr-1 no-scrollbar py-1">
+                <div class="flex flex-col gap-2">
+                    <div id="error-box"
+                        class="p-2 rounded bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-bold hidden">
+                    </div>
+                    <div id="caption-container" class="flex flex-col gap-1">
+                        <span id="caption-speaker"
+                            class="text-[9px] font-bold text-cyan-400 uppercase tracking-widest">Presenter:</span>
+                        <p id="caption-text" class="text-gray-100 font-medium font-semibold">Greetings! I am V-Bot, your
+                            virtual presenter.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Robot Wrapper -->
+        <div id="robot-face-wrapper" class="relative w-44 h-[280px] sm:w-56 sm:h-[360px] pointer-events-auto z-10">
+            <!-- Ambient Glow -->
+            <div id="ambient-glow"
+                class="absolute w-36 h-36 sm:w-48 sm:h-48 rounded-full blur-[35px] sm:blur-[45px] opacity-20 pointer-events-none glow-ambient z-0 transition-all duration-700 bg-amber-500 left-4 top-10 sm:left-4 sm:top-12">
+            </div>
+
+            <!-- Floor Shadow -->
+            <div id="floor-shadow"
+                class="absolute bottom-1 left-1/2 -translate-x-1/2 w-28 sm:w-36 h-3 bg-black/60 rounded-full blur-[4px] pointer-events-none transition-all duration-700 opacity-0 z-0">
+            </div>
+
+            <!-- ========== NEW REALISTIC FEMALE ROBOT SVG ========== -->
+            <svg id="robot-svg" viewBox="0 0 200 320"
+                class="w-full h-full drop-shadow-[0_16px_32px_rgba(0,0,0,0.7)] active:scale-95 transition-transform duration-100 relative z-10">
+                <defs>
+                    <!-- Glow filters -->
+                    <filter id="neon-glow" x="-30%" y="-30%" width="160%" height="160%">
+                        <feGaussianBlur stdDeviation="4" result="blur1" />
+                        <feGaussianBlur stdDeviation="2" result="blur2" />
+                        <feMerge>
+                            <feMergeNode in="blur1" />
+                            <feMergeNode in="blur2" />
+                            <feMergeNode in="SourceGraphic" />
+                        </feMerge>
+                    </filter>
+                    <filter id="soft-glow" x="-20%" y="-20%" width="140%" height="140%">
+                        <feGaussianBlur stdDeviation="6" result="blur" />
+                        <feMerge>
+                            <feMergeNode in="blur" />
+                            <feMergeNode in="SourceGraphic" />
+                        </feMerge>
+                    </filter>
+
+                    <!-- Gradients: premium white/silver chassis + realistic skin tones -->
+                    <linearGradient id="body-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#52525c" />
+                        <stop offset="45%" stop-color="#1c1c22" />
+                        <stop offset="100%" stop-color="#030305" />
+                    </linearGradient>
+                    <linearGradient id="dark-metal" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#5a5a64" />
+                        <stop offset="50%" stop-color="#2e2e36" />
+                        <stop offset="100%" stop-color="#0d0d10" />
+                    </linearGradient>
+                    <linearGradient id="armor-dark" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="#26262e" />
+                        <stop offset="100%" stop-color="#0a0a0c" />
+                    </linearGradient>
+                    <linearGradient id="visor-grad" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="#dfe6ee" stop-opacity="0.4" />
+                        <stop offset="100%" stop-color="#c3ccd9" stop-opacity="0.15" />
+                    </linearGradient>
+                    <!-- Realistic skin tone gradient for the face -->
+                    <radialGradient id="skin-grad" cx="42%" cy="32%" r="75%">
+                        <stop offset="0%" stop-color="#fbe7d7" />
+                        <stop offset="55%" stop-color="#f3d3bc" />
+                        <stop offset="100%" stop-color="#e3b896" />
+                    </radialGradient>
+                    <linearGradient id="hair-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#3a3038" />
+                        <stop offset="55%" stop-color="#241c24" />
+                        <stop offset="100%" stop-color="#120e13" />
+                    </linearGradient>
+                    <radialGradient id="hair-sheen" cx="35%" cy="10%" r="60%">
+                        <stop offset="0%" stop-color="#766a78" stop-opacity="0.55" />
+                        <stop offset="100%" stop-color="#766a78" stop-opacity="0" />
+                    </radialGradient>
+                    <linearGradient id="joint-glow" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stop-color="#fbbf24" />
+                        <stop offset="100%" stop-color="#f97316" />
+                    </linearGradient>
+                    <radialGradient id="iris-grad" cx="50%" cy="42%" r="60%">
+                        <stop offset="0%" stop-color="#ffe9b8" />
+                        <stop offset="55%" stop-color="#f5a623" />
+                        <stop offset="100%" stop-color="#a8650f" />
+                    </radialGradient>
+                </defs>
+
+                <!-- ===== BODY GROUP (floating) ===== -->
+                <g id="robot-body-group" class="robot-float-group" style="transform-origin: 100px 200px;">
+
+                    <!-- ===== LEGS ===== -->
+                    <!-- Left Leg -->
+                    <g id="robot-left-leg" style="transform-origin: 78px 260px;">
+                        <!-- Thigh -->
+                        <path d="M 71,251 C 71,251 69,266 71,278 L 85,278 C 87,266 85,251 85,251 Z"
+                            fill="url(#body-grad)" stroke="#f59e0b" stroke-width="1.3" />
+                        <!-- Knee joint -->
+                        <circle cx="78" cy="280" r="5.5" fill="url(#dark-metal)" stroke="#92400e" stroke-width="1.2" />
+                        <circle cx="78" cy="280" r="2.6" fill="url(#joint-glow)" filter="url(#neon-glow)" />
+                        <!-- Lower leg (calf taper) -->
+                        <path d="M 73,283 C 73,283 71,296 73,305 L 83,305 C 85,296 83,283 83,283 Z"
+                            fill="url(#body-grad)" stroke="#f59e0b" stroke-width="1.1" />
+                        <!-- Ankle joint -->
+                        <circle cx="78" cy="306" r="3.5" fill="url(#dark-metal)" stroke="#92400e" stroke-width="1" />
+                        <!-- Foot -->
+                        <path d="M 67,308 C 67,304 89,304 89,308 L 87,314 L 69,314 Z" fill="url(#armor-dark)"
+                            stroke="#b45309" stroke-width="1.2" />
+                    </g>
+
+                    <!-- Right Leg -->
+                    <g id="robot-right-leg" style="transform-origin: 122px 260px;">
+                        <path d="M 115,251 C 115,251 113,266 115,278 L 129,278 C 131,266 129,251 129,251 Z"
+                            fill="url(#body-grad)" stroke="#f59e0b" stroke-width="1.3" />
+                        <circle cx="122" cy="280" r="5.5" fill="url(#dark-metal)" stroke="#92400e" stroke-width="1.2" />
+                        <circle cx="122" cy="280" r="2.6" fill="url(#joint-glow)" filter="url(#neon-glow)" />
+                        <path d="M 117,283 C 117,283 115,296 117,305 L 127,305 C 129,296 127,283 127,283 Z"
+                            fill="url(#body-grad)" stroke="#f59e0b" stroke-width="1.1" />
+                        <circle cx="122" cy="306" r="3.5" fill="url(#dark-metal)" stroke="#92400e" stroke-width="1" />
+                        <path d="M 111,308 C 111,304 133,304 133,308 L 131,314 L 113,314 Z" fill="url(#armor-dark)"
+                            stroke="#b45309" stroke-width="1.2" />
+                    </g>
+
+                    <!-- ===== ARMS ===== -->
+                    <!-- Left Arm -->
+                    <g id="robot-left-arm" class="cursor-grab" style="transform-origin: 48px 190px;">
+                        <!-- Shoulder joint -->
+                        <circle cx="48" cy="190" r="9" fill="url(#dark-metal)" stroke="#92400e" stroke-width="1.2" />
+                        <circle cx="48" cy="190" r="4" fill="url(#joint-glow)" filter="url(#neon-glow)" />
+                        <!-- Upper arm -->
+                        <path d="M 43,197 C 43,197 42,210 44,219 L 52,219 C 54,210 53,197 53,197 Z"
+                            fill="url(#body-grad)" stroke="#f59e0b" stroke-width="1.2" />
+                        <!-- Elbow joint -->
+                        <circle cx="48" cy="220" r="4.5" fill="url(#dark-metal)" stroke="#92400e" stroke-width="1" />
+                        <circle cx="48" cy="220" r="2.2" fill="url(#joint-glow)" filter="url(#neon-glow)" />
+                        <!-- Forearm -->
+                        <path d="M 44,224 C 44,224 43,234 45,241 L 51,241 C 53,234 52,224 52,224 Z"
+                            fill="url(#body-grad)" stroke="#f59e0b" stroke-width="1" />
+                        <!-- Wrist -->
+                        <circle cx="48" cy="242" r="3.5" fill="url(#dark-metal)" stroke="#92400e" stroke-width="0.8" />
+                        <!-- Hand (skin-toned, separated slender fingers for natural gesture) -->
+                        <g id="left-hand-fingers">
+                            <path d="M 43.5,246 C 42.5,250 43,254 44.5,257" fill="none" stroke="#e3b896"
+                                stroke-width="2.6" stroke-linecap="round" />
+                            <path d="M 46,246.5 C 45.5,251 46,256 47,259.5" fill="none" stroke="#e3b896"
+                                stroke-width="2.8" stroke-linecap="round" />
+                            <path d="M 48.5,246.5 C 48.5,251.5 48.5,257 49,260.5" fill="none" stroke="#e3b896"
+                                stroke-width="2.9" stroke-linecap="round" />
+                            <path d="M 51,246.5 C 51.3,251 51,256 50.3,259.5" fill="none" stroke="#e3b896"
+                                stroke-width="2.7" stroke-linecap="round" />
+                            <path d="M 53,246 C 53.5,249.5 53.3,253 52.3,256" fill="none" stroke="#e3b896"
+                                stroke-width="2.4" stroke-linecap="round" />
+                            <ellipse cx="48" cy="246" rx="5.4" ry="4.2" fill="url(#skin-grad)" stroke="#d8a988"
+                                stroke-width="0.6" />
+                        </g>
+                    </g>
+
+                    <!-- Right Arm -->
+                    <g id="robot-right-arm" class="cursor-grab" style="transform-origin: 152px 190px;">
+                        <circle cx="152" cy="190" r="9" fill="url(#dark-metal)" stroke="#92400e" stroke-width="1.2" />
+                        <circle cx="152" cy="190" r="4" fill="url(#joint-glow)" filter="url(#neon-glow)" />
+                        <path d="M 147,197 C 147,197 146,210 148,219 L 156,219 C 158,210 157,197 157,197 Z"
+                            fill="url(#body-grad)" stroke="#f59e0b" stroke-width="1.2" />
+                        <circle cx="152" cy="220" r="4.5" fill="url(#dark-metal)" stroke="#92400e" stroke-width="1" />
+                        <circle cx="152" cy="220" r="2.2" fill="url(#joint-glow)" filter="url(#neon-glow)" />
+                        <path d="M 148,224 C 148,224 147,234 149,241 L 155,241 C 157,234 156,224 156,224 Z"
+                            fill="url(#body-grad)" stroke="#f59e0b" stroke-width="1" />
+                        <circle cx="152" cy="242" r="3.5" fill="url(#dark-metal)" stroke="#92400e" stroke-width="0.8" />
+                        <!-- Hand (skin-toned, separated slender fingers) -->
+                        <g id="right-hand-fingers">
+                            <path d="M 147.7,256 C 146.7,253 147,249 148.5,246" fill="none" stroke="#e3b896"
+                                stroke-width="2.4" stroke-linecap="round" />
+                            <path d="M 149.7,259.5 C 148.7,256 149,251.5 149.5,246.5" fill="none" stroke="#e3b896"
+                                stroke-width="2.7" stroke-linecap="round" />
+                            <path d="M 151.5,260.5 C 151.5,257 151.5,251.5 151.5,246.5" fill="none" stroke="#e3b896"
+                                stroke-width="2.9" stroke-linecap="round" />
+                            <path d="M 153,259.5 C 153.7,256 154,251 154,246.5" fill="none" stroke="#e3b896"
+                                stroke-width="2.8" stroke-linecap="round" />
+                            <path d="M 155,256 C 155.7,253 155.5,249.5 155,246" fill="none" stroke="#e3b896"
+                                stroke-width="2.4" stroke-linecap="round" />
+                            <ellipse cx="152" cy="246" rx="5.4" ry="4.2" fill="url(#skin-grad)" stroke="#d8a988"
+                                stroke-width="0.6" />
+                        </g>
+                    </g>
+
+                    <!-- ===== TORSO (Sleek Premium Chassis) ===== -->
+                    <g id="torso-group">
+                        <!-- Main body shell -->
+                        <path
+                            d="M 64,170 C 60,184 56,206 58,228 C 60,246 74,258 100,258 C 126,258 140,246 142,228 C 144,206 140,184 136,170 Z"
+                            fill="url(#body-grad)" stroke="#f59e0b" stroke-width="2" />
+                        <!-- Side shading panels (subtle waist contour) -->
+                        <path d="M 64,170 C 60,184 56,206 58,228 C 59,236 63,233 66,226 C 63,210 66,188 66,188 Z"
+                            fill="url(#armor-dark)" opacity="0.55" />
+                        <path
+                            d="M 136,170 C 140,184 144,206 142,228 C 141,236 137,233 134,226 C 137,210 134,188 134,188 Z"
+                            fill="url(#armor-dark)" opacity="0.55" />
+                        <!-- Subtle seam lines -->
+                        <path d="M 72,180 C 80,188 100,190 100,190 C 100,190 120,188 128,180" fill="none"
+                            stroke="#f59e0b" stroke-width="1" opacity="0.7" />
+                        <path d="M 70,234 C 82,244 118,244 130,234" fill="none" stroke="#f59e0b" stroke-width="1"
+                            opacity="0.7" />
+                        <!-- Waistline trim with accent -->
+                        <path
+                            d="M 64,222 C 58,234 52,246 50,256 C 50,261 150,261 150,256 C 148,246 142,234 136,222 C 124,229 76,229 64,222 Z"
+                            fill="url(#armor-dark)" stroke="#f59e0b" stroke-width="1.8" class="neon-color-stroke"
+                            filter="url(#neon-glow)" opacity="0.9" />
+                        <rect x="64" y="218" width="72" height="4" rx="2" fill="url(#dark-metal)" opacity="0.5" />
+
+                        <!-- Collarbone status indicator (small, elegant) -->
+                        <circle cx="100" cy="206" r="8" fill="#15151a" stroke="#f59e0b" stroke-width="1.4" />
+                        <circle cx="100" cy="206" r="4.5" fill="url(#joint-glow)" class="glowing-core"
+                            filter="url(#neon-glow)" />
+                    </g>
+
+                    <!-- ===== NECK ===== -->
+                    <g id="neck-group">
+                        <path d="M 88,150 C 88,150 86,162 88,173 L 112,173 C 114,162 112,150 112,150 Z"
+                            fill="url(#skin-grad)" stroke="#d8a988" stroke-width="1" />
+                        <!-- Subtle mechanical seam at base of neck (collar) -->
+                        <rect x="84" y="170" width="32" height="5" rx="2.5" fill="url(#dark-metal)" opacity="0.85" />
+                        <line x1="100" y1="172" x2="100" y2="176" stroke="#f59e0b" stroke-width="2"
+                            class="neon-color-stroke" filter="url(#neon-glow)" opacity="0.8" />
+                    </g>
+
+                    <!-- ===== HEAD (Realistic Humanoid Android) ===== -->
+                    <g id="head-group">
+                        <!-- Hair back mass -->
+                        <path
+                            d="M 38,62 C 36,24 60,12 100,12 C 140,12 164,24 162,62 C 161,96 162,138 152,162 C 150,150 150,128 149,108 C 149,108 146,40 100,40 C 54,40 51,108 51,108 C 50,128 50,150 48,162 C 38,138 39,96 38,62 Z"
+                            fill="url(#hair-grad)" />
+                        <path
+                            d="M 38,62 C 36,24 60,12 100,12 C 140,12 164,24 162,62 C 162,70 161,80 160,88 C 152,46 132,32 100,32 C 68,32 48,46 40,88 C 39,80 38,70 38,62 Z"
+                            fill="url(#hair-sheen)" />
+
+                        <!-- Face (realistic skin tone, natural proportions) -->
+                        <path
+                            d="M 47,52 C 47,58 48,104 54,126 C 61,148 80,158 100,158 C 120,158 139,148 146,126 C 152,104 153,58 153,52 C 153,38 130,30 100,30 C 70,30 47,38 47,52 Z"
+                            fill="url(#skin-grad)" stroke="#dba87f" stroke-width="1" />
+
+                        <!-- Subtle cheekbone + jaw shading for realism -->
+                        <path d="M 52,90 C 53,108 58,124 66,136 C 60,126 56,108 56,90 Z" fill="#caa07c" opacity="0.3" />
+                        <path d="M 148,90 C 147,108 142,124 134,136 C 140,126 144,108 144,90 Z" fill="#caa07c"
+                            opacity="0.3" />
+
+                        <!-- Ears -->
+                        <path d="M 45,80 C 39,80 36,86 37,94 C 38,102 42,106 47,104 Z" fill="url(#skin-grad)"
+                            stroke="#d8a988" stroke-width="1" />
+                        <path d="M 155,80 C 161,80 164,86 163,94 C 162,102 158,106 153,104 Z" fill="url(#skin-grad)"
+                            stroke="#d8a988" stroke-width="1" />
+                        <!-- Small discreet tech node on ear (the only visible "android" tell) -->
+                        <circle cx="40" cy="93" r="2.6" fill="url(#joint-glow)" filter="url(#neon-glow)" />
+                        <circle cx="160" cy="93" r="2.6" fill="url(#joint-glow)" filter="url(#neon-glow)" />
+
+                        <!-- Hair front (natural swept fringe) -->
+                        <path
+                            d="M 47,49 C 58,29 142,29 153,49 C 155,53 152,58 147,55 C 137,50 127,47 117,49 C 110,50 105,53 100,54 C 95,53 90,50 83,49 C 73,47 63,50 53,55 C 48,58 45,53 47,49 Z"
+                            fill="url(#hair-grad)" />
+                        <!-- Side hair strands framing the face -->
+                        <path d="M 48,54 C 44,71 44,95 50,112 C 51,114 49,116 48,113 C 41,95 41,71 46,52 Z"
+                            fill="url(#hair-grad)" opacity="0.85" />
+                        <path d="M 152,54 C 156,71 156,95 150,112 C 149,114 151,116 152,113 C 159,95 159,71 154,52 Z"
+                            fill="url(#hair-grad)" opacity="0.85" />
+
+                        <!-- Soft brow ridge shading -->
+                        <path d="M 56,67 C 62,62 72,61 79,64" fill="none" stroke="#c89a72" stroke-width="2.2"
+                            stroke-linecap="round" opacity="0.6" />
+                        <path d="M 121,64 C 128,61 138,62 144,67" fill="none" stroke="#c89a72" stroke-width="2.2"
+                            stroke-linecap="round" opacity="0.6" />
+
+                        <!-- Nose (subtle, realistic) -->
+                        <path d="M 97,82 C 95,92 93,100 91,106 C 93,109 107,109 109,106 C 107,100 105,92 103,82"
+                            fill="none" stroke="#d3a47e" stroke-width="1.3" stroke-linecap="round" opacity="0.55" />
+
+                        <!-- Subtle natural blush -->
+                        <ellipse cx="58" cy="100" rx="9" ry="5" fill="#e8927e" opacity="0.18" />
+                        <ellipse cx="142" cy="100" rx="9" ry="5" fill="#e8927e" opacity="0.18" />
+
+                        <!-- ===== EYES (realistic, human-like) ===== -->
+                        <g id="eyes-group">
+                            <!-- Left Eye: white + iris + pupil for human realism, glow class kept for blink -->
+                            <g id="left-eye-group">
+                                <ellipse cx="65" cy="75" rx="11" ry="7.5" fill="#fdfaf6" />
+                                <circle id="left-eye" cx="65" cy="75" r="6" fill="url(#iris-grad)" class="robot-eye" />
+                                <circle cx="65" cy="75" r="2.4" fill="#0c1a22" />
+                                <circle cx="62.5" cy="72.5" r="1.4" fill="#ffffff" opacity="0.85" />
+                            </g>
+                            <!-- Right Eye -->
+                            <g id="right-eye-group">
+                                <ellipse cx="135" cy="75" rx="11" ry="7.5" fill="#fdfaf6" />
+                                <circle id="right-eye" cx="135" cy="75" r="6" fill="url(#iris-grad)"
+                                    class="robot-eye-right" />
+                                <circle cx="135" cy="75" r="2.4" fill="#0c1a22" />
+                                <circle cx="132.5" cy="72.5" r="1.4" fill="#ffffff" opacity="0.85" />
+                            </g>
+                            <!-- Natural upper lash lines -->
+                            <g id="brows-and-lashes" stroke="#3a2a20" stroke-width="1.6" stroke-linecap="round"
+                                opacity="0.75">
+                                <path d="M 54,69 Q 65,64 76,69" fill="none" />
+                                <path d="M 124,69 Q 135,64 146,69" fill="none" />
+                            </g>
+                        </g>
+
+                        <!-- ===== MOUTH / EQ AREA (realistic lips by default) ===== -->
+                        <g id="mouth-container">
+                            <!-- Default neutral mouth: soft realistic lip line -->
+                            <path d="M 82,115 Q 100,119 118,115" fill="none" stroke="#c2685a" stroke-width="3.4"
+                                stroke-linecap="round" />
+                        </g>
+                    </g>
+                </g>
+            </svg>
+            <!-- ========== END NEW SVG ========== -->
+        </div>
+    </div>
+
+    <!-- ========== SCRIPT (unchanged logic, only minor adjustments for new SVG) ========== -->
+    <script>
+        // -------------------- CONFIGURATION --------------------
+        const LANGUAGES = [
+            { code: "en", locale: "en-US", name: "English (US)" },
+            { code: "hi", locale: "hi-IN", name: "Hindi (हिंदी)" },
+            { code: "gu", locale: "gu-IN", name: "Gujarati (ગુજરાતી)" }
+        ];
+
+        const INTROS = {
+            en: "Hello! Welcome to Vihil Infotech. I am your virtual host, and I am thrilled to introduce you to our company. At Vihil Infotech, we specialize in high-performance web development, mobile applications, and cloud systems, with a strong focus on cutting-edge AI and machine learning integrations. Thank you for visiting us, and we look forward to building something extraordinary together.",
+            hi: "नमस्ते! विहिल इन्फोटेक में आपका स्वागत है। मैं आपकी वर्चुअल होस्ट हूँ, और मुझे हमारी कंपनी का परिचय देने में बेहद खुशी हो रही है। विहिल इन्फोटेक में, हम हाई-परफॉर्मेंस वेब डेवलपमेंट, मोबाइल ऐप्स और क्लाउड सॉल्यूशंस में विशेषज्ञता रखते हैं, जिसमें आर्टिफिशियल इंटेलिजेंस और मशीन लर्निंग का विशेष फोकस है। चाहे आप एक नया स्टार्टअप हों जो अपना पहला MVP लॉन्च करना चाहते हैं, या एक स्थापित उद्यम जो डिजिटल परिवर्तन की तलाश में हैं, हमारे समर्पित तकनीकी विशेषज्ञों की टीम आपकी दृष्टि को स्केलेबल और सुरक्षित वास्तविकता में बदलने के लिए यहाँ है। हमसे मिलने के लिए धन्यवाद, और हम आपके साथ मिलकर कुछ असाधारण बनाने की उम्मीद करते हैं।",
+            gu: "નમસ્તે! વિહિલ ઇન્ફોટેકમાં આપનું સ્વાગત છે. હું તમારી વર્ચ્યુઅલ હોસ્ટ છું, અને મને અમારી કંપનીનો પરિચય આપતા ખૂબ જ આનંદ થાય છે. વિહિલ ઇન્ફોટેકમાં, અમે આર્ટિફિશિયલ ઇન્ટેલિજન્સ અને મશીન લર્નિંગના વિશેષ ફોકસ સાથે હાઇ-પર્ફોર્મન્સ વેબ ડેવલપમેન્ટ, મોબાઇલ એપ્લિકેશન્સ અને ક્લાઉડ સિસ્ટમ્સમાં નિપુણતા ધરાવીએ છીએ. ભલે તમે તમારો પ્રથમ MVP લોન્ચ કરવા માંગતા સ્ટાર્ટઅપ હોવ, અથવા ડિજિટલ ટ્રાન્સફોર્મેશન શોધી રહેલા સ્થાપિત એન્ટરપ્રાઇઝ હોવ, અમારી સમર્પિત ટેક નિષ્ણાતોની ટીમ તમારી દ્રષ્ટિને સ્કેલેબલ, સુરક્ષિત વાસ્તવિકતામાં બદલવા માટે અહીં છે. અમારી મુલાકાત લેવા બદલ આભાર, અને અમે સાથે મળીને કંઈક અસાધારણ બનાવવા માટે ઉત્સુક છીએ।"
+        };
+
+        const THEME_COLORS = {
+            en: {
+                glow: "#f59e0b", label: "V-BOT (EN)", textClass: "text-amber-400", borderClass: "border-amber-500/20",
+                lightClass: "bg-amber-400 shadow-[0_0_6px_#f59e0b]"
+            },
+            hi: {
+                glow: "#f97316", label: "V-BOT (HI)", textClass: "text-orange-500", borderClass: "border-orange-500/20",
+                lightClass: "bg-orange-500 shadow-[0_0_6px_#f97316]"
+            },
+            gu: {
+                glow: "#ec4899", label: "V-BOT (GU)", textClass: "text-pink-500", borderClass: "border-pink-500/20",
+                lightClass: "bg-pink-500 shadow-[0_0_6px_#ec4899]"
+            }
+        };
+
+        let selectedLang = LANGUAGES[0];
+        let isMuted = false;
+        let isPresenterMode = false;
+
+        let widgetState = "closed"; // "closed" | "walk-in" | "speaking" | "walk-out"
+        let robotState = "idle";
+        let expression = "neutral";
+
+        let audioObj = null;
+        let subtitlesTimer = null;
+        let walkOutTimer = null;
+        let ttsCache = {};
+        let prefetchPromise = null;
+        let isLimbAnimating = false;
+
+        let recognition = null;
+        let isListening = false;
+        let userTranscript = "";
+
+        // DOM refs
+        const meetPresenterBtn = document.getElementById("meet-presenter-btn");
+        const widgetContainer = document.getElementById("vbot-widget-container");
+        const speechBubble = document.getElementById("speech-bubble");
+        const statusLight = document.getElementById("status-light");
+        const statusText = document.getElementById("status-text");
+        const globeBtn = document.getElementById("globe-btn");
+        const langDropdown = document.getElementById("lang-dropdown-menu");
+        const muteBtn = document.getElementById("mute-toggle-btn");
+        const volumeIcon = document.getElementById("volume-icon");
+        const closeBtn = document.getElementById("close-widget-btn");
+        const errorBox = document.getElementById("error-box");
+        const captionSpeaker = document.getElementById("caption-speaker");
+        const captionText = document.getElementById("caption-text");
+        const robotFaceWrapper = document.getElementById("robot-face-wrapper");
+        const ambientGlow = document.getElementById("ambient-glow");
+        const robotSvg = document.getElementById("robot-svg");
+        const robotBody = document.getElementById("robot-body-group");
+        const leftArm = document.getElementById("robot-left-arm");
+        const rightArm = document.getElementById("robot-right-arm");
+        const leftLeg = document.getElementById("robot-left-leg");
+        const rightLeg = document.getElementById("robot-right-leg");
+
+        // ---------- EVENT LISTENERS ----------
+        meetPresenterBtn.addEventListener("click", triggerPresenterFlow);
+        globeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            langDropdown.classList.toggle("hidden");
+        });
+        document.addEventListener("click", () => langDropdown.classList.add("hidden"));
+        muteBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            handleMuteToggle();
+        });
+        closeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            triggerWalkOut();
+        });
+        robotFaceWrapper.addEventListener("click", (e) => {
+            e.stopPropagation();
+            triggerRandomMovement();
+        });
+
+        // ---------- SPEECH RECOGNITION ----------
+        function initSpeechRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (SpeechRecognition) {
+                recognition = new SpeechRecognition();
+                recognition.continuous = false;
+                recognition.interimResults = true;
+                recognition.maxAlternatives = 1;
+
+                recognition.onstart = () => {
+                    isListening = true;
+                    userTranscript = "";
+                    setRobotState("listening", "neutral");
+                    captionSpeaker.textContent = "You:";
+                    captionSpeaker.className = "text-[9px] font-bold text-emerald-500 uppercase tracking-widest";
+                    captionText.innerHTML = `<span class="italic text-white">Listening...</span>`;
+                    errorBox.classList.add("hidden");
+                };
+
+                recognition.onresult = (event) => {
+                    let interim = "",
+                        final = "";
+                    for (let i = event.resultIndex; i < event.results.length; ++i) {
+                        if (event.results[i].isFinal) final += event.results[i][0].transcript;
+                        else interim += event.results[i][0].transcript;
+                    }
+                    userTranscript = final || interim;
+                    captionText.innerHTML = `<span class="italic text-white">"${userTranscript}"</span>`;
+                };
+
+                recognition.onerror = (event) => {
+                    console.error("Speech error:", event.error);
+                    let errMsg = "Speech recognition error.";
+                    if (event.error === "no-speech") errMsg = "No speech detected. Please speak clearly.";
+                    else if (event.error === "not-allowed") errMsg = "Microphone access denied. Please allow mic.";
+                    showError(errMsg);
+                    isListening = false;
+                    setRobotState("idle", "sad");
+                };
+
+                recognition.onend = () => {
+                    isListening = false;
+                    const query = userTranscript.trim();
+                    if (query) submitVoiceQuery(query);
+                    else {
+                        setRobotState("idle", "neutral");
+                        captionSpeaker.textContent = "Presenter:";
+                        captionSpeaker.className = "text-[9px] font-bold text-cyan-400 uppercase tracking-widest";
+                        captionText.textContent = "Click me to speak again!";
+                    }
+                };
+            } else {
+                showError("Web Speech API not supported. Use Chrome/Edge.");
+            }
+        }
+
+        function toggleMic() {
+            if (!recognition) initSpeechRecognition();
+            if (!recognition) return;
+            if (isListening) { try { recognition.stop(); } catch (e) { } } else {
+                stopAudio();
+                recognition.lang = selectedLang.locale;
+                try { recognition.start(); } catch (e) { console.warn(e); }
+            }
+        }
+
+        // ---------- API CALLS ----------
+        async function submitVoiceQuery(queryText) {
+            setRobotState("thinking", "thinking");
+            captionSpeaker.textContent = "Presenter:";
+            captionSpeaker.className = "text-[9px] font-bold text-cyan-400 uppercase tracking-widest";
+            captionText.innerHTML = `<span class="italic text-gray-400 animate-pulse">Processing voice pattern...</span>`;
+
+            try {
+                const res = await fetch("/api/voice-query", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ query: queryText, lang: selectedLang.code })
+                });
+                if (!res.ok) throw new Error("Local assistant API error.");
+                const data = await res.json();
+                captionText.textContent = data.text;
+                if (data.audio) {
+                    setRobotState("speaking", data.expression || "neutral");
+                    playAudioBase64(data.audio, () => setRobotState("idle", "neutral"));
+                } else {
+                    setRobotState("idle", "neutral");
+                }
+                if (data.redirect) setTimeout(() => window.location.href = data.redirect, 1500);
+            } catch (err) {
+                console.error(err);
+                showError(err.message || "Failed to talk with Vihil API.");
+                captionText.textContent = "System error. Is the server running?";
+                setRobotState("idle", "sad");
+            }
+        }
+
+        function playAudioBase64(audioB64, onEnded) {
+            stopAudio();
+            const src = `data:audio/mp3;base64,${audioB64}`;
+            audioObj = new Audio(src);
+            audioObj.onended = () => { stopAudio(); if (onEnded) onEnded(); };
+            audioObj.onerror = (e) => {
+                console.error(e);
+                showError("Voice playback failed.");
+                setRobotState("idle", "sad");
+            };
+            audioObj.play().catch(err => { console.warn("Autoplay blocked:", err); if (onEnded) onEnded(); });
+        }
+
+        async function getTTSData(langCode) {
+            if (ttsCache[langCode]) return ttsCache[langCode];
+            const res = await fetch("/api/tts", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text: INTROS[langCode], lang: langCode })
+            });
+            if (!res.ok) throw new Error("TTS endpoint error");
+            const data = await res.json();
+            ttsCache[langCode] = data;
+            return data;
+        }
+
+        function stopAudio() {
+            if (audioObj) {
+                audioObj.pause();
+                audioObj = null;
+            }
+            if (subtitlesTimer) {
+                clearTimeout(subtitlesTimer);
+                subtitlesTimer = null;
+            }
+            if (walkOutTimer) {
+                clearTimeout(walkOutTimer);
+                walkOutTimer = null;
+            }
+            robotSvg.classList.remove("speaking");
+        }
+
+        // ---------- PRESENTER FLOW ----------
+        function triggerPresenterFlow() {
+            stopAudio();
+            widgetState = "walk-in";
+            isPresenterMode = true;
+            errorBox.classList.add("hidden");
+            meetPresenterBtn.classList.add("hidden");
+
+            const mainHero = document.getElementById("main-hero");
+            if (mainHero) mainHero.classList.add("opacity-20", "blur-sm", "pointer-events-none");
+
+            prefetchPromise = getTTSData(selectedLang.code);
+
+            widgetContainer.classList.remove("hidden");
+            widgetContainer.offsetWidth;
+            widgetContainer.classList.remove("opacity-0");
+            widgetContainer.classList.add("opacity-100");
+
+            robotSvg.style.animation = "walk-forward-animation 2.5s cubic-bezier(0.25,0.46,0.45,0.94) forwards";
+            document.getElementById("floor-shadow").style.animation = "shadow-forward 2.5s cubic-bezier(0.25,0.46,0.45,0.94) forwards";
+
+            applyThemeColors(selectedLang.code);
+            setRobotState("idle", "neutral");
+            captionSpeaker.textContent = "Presenter:";
+            captionSpeaker.className = "text-[9px] font-bold text-cyan-400 uppercase tracking-widest";
+            captionText.textContent = "V-Bot loading intro sequence...";
+
+            setTimeout(async () => {
+                if (widgetState !== "walk-in") return;
+                widgetState = "speaking";
+                robotSvg.style.animation = "";
+                const shadow = document.getElementById("floor-shadow");
+                shadow.style.animation = "";
+                shadow.style.transform = "translate(-50%, 0) scale(1.0)";
+                shadow.style.opacity = "0.55";
+
+                speechBubble.classList.remove("opacity-0", "scale-95");
+                speechBubble.classList.add("opacity-100", "scale-100");
+
+                try {
+                    const data = await prefetchPromise;
+                    playPresenterSpeech(data);
+                } catch (err) {
+                    console.error(err);
+                    showError("Failed to synthesize presentation.");
+                    triggerWalkOut();
+                }
+            }, 2500);
+        }
+
+        function playPresenterSpeech(data) {
+            if (widgetState !== "speaking") return;
+            const subtitles = data.subtitles || [];
+            setRobotState("speaking", "happy");
+            robotSvg.classList.add("speaking");
+
+            if (isMuted) {
+                let subIdx = 0;
+
+                function showNextSub() {
+                    if (widgetState !== "speaking" || !isMuted) return;
+                    if (subIdx >= subtitles.length) { triggerWalkOut(); return; }
+                    const sub = subtitles[subIdx];
+                    captionText.textContent = sub.text;
+                    setRobotState("speaking", "happy");
+                    robotSvg.classList.add("speaking");
+
+                    const nextDelay = (subIdx === subtitles.length - 1) ?
+                        (sub.end - sub.start) * 1000 + 1000 :
+                        (subtitles[subIdx + 1].start - sub.start) * 1000;
+                    const subDuration = (sub.end - sub.start) * 1000;
+                    setTimeout(() => {
+                        if (widgetState === "speaking" && isMuted) {
+                            setRobotState("idle", "neutral");
+                            robotSvg.classList.remove("speaking");
+                        }
+                    }, subDuration);
+                    subIdx++;
+                    subtitlesTimer = setTimeout(showNextSub, nextDelay);
+                }
+                showNextSub();
+            } else {
+                audioObj = new Audio(data.audio);
+                audioObj.ontimeupdate = () => {
+                    const time = audioObj.currentTime;
+                    const currentSub = subtitles.find(s => time >= s.start && time <= s.end);
+                    if (currentSub) {
+                        captionText.textContent = currentSub.text;
+                        setRobotState("speaking", "happy");
+                        robotSvg.classList.add("speaking");
+                    } else {
+                        setRobotState("idle", "happy");
+                        robotSvg.classList.remove("speaking");
+                    }
+                };
+                audioObj.onended = () => {
+                    setRobotState("idle", "neutral");
+                    triggerWalkOut();
+                };
+                audioObj.onerror = () => {
+                    setRobotState("idle", "neutral");
+                    triggerWalkOut();
+                };
+                audioObj.play().catch(err => {
+                    console.warn("Autoplay blocked. Visual mode.", err);
+                    isMuted = true;
+                    playPresenterSpeech(data);
+                });
+            }
+        }
+
+        function triggerWalkOut() {
+            stopAudio();
+            widgetState = "walk-out";
+            speechBubble.classList.remove("opacity-100", "scale-100");
+            speechBubble.classList.add("opacity-0", "scale-95");
+
+            robotSvg.style.animation = "walk-back-animation 2.5s cubic-bezier(0.25,0.46,0.45,0.94) forwards";
+            document.getElementById("floor-shadow").style.animation = "shadow-backward 2.5s cubic-bezier(0.25,0.46,0.45,0.94) forwards";
+
+            const mainHero = document.getElementById("main-hero");
+            if (mainHero) mainHero.classList.remove("opacity-20", "blur-sm", "pointer-events-none");
+
+            setTimeout(() => {
+                if (widgetState !== "walk-out") return;
+                widgetState = "closed";
+                widgetContainer.classList.remove("opacity-100");
+                widgetContainer.classList.add("opacity-0");
+                setTimeout(() => {
+                    if (widgetState === "closed") {
+                        widgetContainer.classList.add("hidden");
+                        meetPresenterBtn.classList.remove("hidden");
+                        robotSvg.style.animation = "";
+                        const shadow = document.getElementById("floor-shadow");
+                        shadow.style.animation = "";
+                        shadow.style.transform = "translate(-50%, 0) scale(0.15)";
+                        shadow.style.opacity = "0";
+                    }
+                }, 500);
+            }, 2500);
+        }
+
+        // ---------- MUTE / LANGUAGE ----------
+        function handleMuteToggle() {
+            isMuted = !isMuted;
+            if (isMuted) {
+                muteBtn.title = "Unmute Speech";
+                volumeIcon.innerHTML =
+                    `<path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M22 9l-6 6M16 9l6 6" stroke="#f43f5e" stroke-width="2.5"/>`;
+            } else {
+                muteBtn.title = "Mute Speech";
+                volumeIcon.innerHTML =
+                    `<path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>`;
+            }
+            if (widgetState === "speaking" && isPresenterMode) {
+                const data = ttsCache[selectedLang.code];
+                stopAudio();
+                if (data) setTimeout(() => playPresenterSpeech(data), 100);
+            }
+        }
+
+        function handleLanguageChange(langCode) {
+            const lang = LANGUAGES.find(l => l.code === langCode);
+            if (!lang) return;
+            selectedLang = lang;
+            langDropdown.classList.add("hidden");
+            stopAudio();
+            applyThemeColors(langCode);
+            if (widgetState === "speaking" && isPresenterMode) {
+                captionText.textContent = "Loading new translation...";
+                prefetchPromise = getTTSData(langCode);
+                prefetchPromise.then(data => playPresenterSpeech(data)).catch(err => {
+                    console.error(err);
+                    triggerWalkOut();
+                });
+            } else {
+                setRobotState("idle", "neutral");
+                captionSpeaker.textContent = "Presenter:";
+                captionSpeaker.className = "text-[9px] font-bold text-cyan-400 uppercase tracking-widest";
+                captionText.textContent = "Language updated. Ready to present in " + lang.name + "!";
+            }
+        }
+
+        function applyThemeColors(langCode) {
+            const theme = THEME_COLORS[langCode] || THEME_COLORS.en;
+            ambientGlow.style.backgroundColor = theme.glow;
+            document.querySelectorAll(".neon-color-fill").forEach(el => el.setAttribute("fill", theme.glow));
+            document.querySelectorAll(".neon-color-stroke").forEach(el => el.setAttribute("stroke", theme.glow));
+            updateRobotFace(robotState, expression);
+        }
+
+        function showError(msg) {
+            errorBox.textContent = msg;
+            errorBox.classList.remove("hidden");
+        }
+
+        // ---------- ROBOT EXPRESSION ENGINE ----------
+        function updateRobotFace(state, expr) {
+            const mouthContainer = document.getElementById("mouth-container");
+            const eyesGroup = document.getElementById("eyes-group");
+            const glowColor = (THEME_COLORS[selectedLang.code] || THEME_COLORS.en).glow;
+
+            // Mouth
+            if (state === "speaking") {
+                mouthContainer.innerHTML = `
+                        <clipPath id="mouth-clip">
+                            <path d="M 80,112 Q 100,128 120,112 Q 100,124 80,112 Z" />
+                        </clipPath>
+                        <path d="M 80,112 Q 100,128 120,112 Q 100,124 80,112 Z" fill="#5c2018" />
+                        <g clip-path="url(#mouth-clip)" transform="translate(78, 113)">
+                            ${Array.from({ length: 9 }).map((_, i) => `
+                                <rect class="eq-bar eq-bar-${i + 1}" x="${i * 5}" y="-6" width="5.2" height="14" fill="#a8493c" />
+                            `).join("")}
+                        </g>
+                        <path d="M 80,112 Q 100,128 120,112" fill="none" stroke="#8a3a2f" stroke-width="1.4" stroke-linecap="round" />
+                        <path d="M 80,112 Q 100,103 120,112" fill="none" stroke="#c2685a" stroke-width="2.6" stroke-linecap="round" />
+                    `;
+            } else if (state === "listening") {
+                mouthContainer.innerHTML = `
+                        <ellipse cx="100" cy="116" rx="9" ry="6" fill="#a8493c" class="animate-pulse-recording" />
+                    `;
+            } else if (state === "thinking") {
+                mouthContainer.innerHTML = `
+                        <g transform="translate(76, 115)">
+                            <circle class="bounce-dot-1" cx="0" cy="0" r="3.6" fill="#c2685a" />
+                            <circle class="bounce-dot-2" cx="24" cy="0" r="3.6" fill="#c2685a" />
+                            <circle class="bounce-dot-3" cx="48" cy="0" r="3.6" fill="#c2685a" />
+                        </g>
+                    `;
+            } else {
+                if (expr === "happy") {
+                    mouthContainer.innerHTML =
+                        `<path d="M 78,113 Q 100,126 122,113 Q 100,121 78,113 Z" fill="#a8493c" stroke="#8a3a2f" stroke-width="0.8" />`;
+                } else if (expr === "sad") {
+                    mouthContainer.innerHTML =
+                        `<path d="M 80,121 Q 100,110 120,121" fill="none" stroke="#a8493c" stroke-width="3.2" stroke-linecap="round" />`;
+                } else if (expr === "surprised") {
+                    mouthContainer.innerHTML =
+                        `<ellipse cx="100" cy="116" rx="7" ry="9" fill="#7a2e25" stroke="#a8493c" stroke-width="1.2" />`;
+                } else {
+                    mouthContainer.innerHTML =
+                        `<path d="M 82,115 Q 100,119 118,115" fill="none" stroke="#c2685a" stroke-width="3.4" stroke-linecap="round" />`;
+                }
+            }
+
+            // Eyes (realistic human-style: white sclera + iris/pupil for neutral; soft curves for expressions)
+            let leftHtml = "",
+                rightHtml = "";
+            if (expr === "happy") {
+                leftHtml =
+                    `<path d="M53,77 Q65,66 77,77" fill="none" stroke="#3a2a20" stroke-width="3" stroke-linecap="round" />`;
+                rightHtml =
+                    `<path d="M123,77 Q135,66 147,77" fill="none" stroke="#3a2a20" stroke-width="3" stroke-linecap="round" />`;
+            } else if (expr === "sad") {
+                leftHtml = `
+                        <ellipse cx="65" cy="76" rx="10" ry="6" fill="#fdfaf6" />
+                        <circle cx="65" cy="77" r="5.5" fill="url(#iris-grad)" />
+                        <circle cx="65" cy="77" r="2.2" fill="#0c1a22" />
+                        <path d="M55,69 Q65,73 75,69" fill="none" stroke="#3a2a20" stroke-width="2.4" stroke-linecap="round" opacity="0.8" />`;
+                rightHtml = `
+                        <ellipse cx="135" cy="76" rx="10" ry="6" fill="#fdfaf6" />
+                        <circle cx="135" cy="77" r="5.5" fill="url(#iris-grad)" />
+                        <circle cx="135" cy="77" r="2.2" fill="#0c1a22" />
+                        <path d="M125,69 Q135,73 145,69" fill="none" stroke="#3a2a20" stroke-width="2.4" stroke-linecap="round" opacity="0.8" />`;
+            } else if (expr === "surprised") {
+                leftHtml = `
+                        <ellipse cx="65" cy="75" rx="12" ry="9" fill="#fdfaf6" stroke="#3a2a20" stroke-width="1" opacity="0.9" />
+                        <circle id="left-eye" cx="65" cy="75" r="6.5" fill="url(#iris-grad)" class="robot-eye" />
+                        <circle cx="65" cy="75" r="2.6" fill="#0c1a22" />`;
+                rightHtml = `
+                        <ellipse cx="135" cy="75" rx="12" ry="9" fill="#fdfaf6" stroke="#3a2a20" stroke-width="1" opacity="0.9" />
+                        <circle id="right-eye" cx="135" cy="75" r="6.5" fill="url(#iris-grad)" class="robot-eye-right" />
+                        <circle cx="135" cy="75" r="2.6" fill="#0c1a22" />`;
+            } else if (expr === "concerned") {
+                leftHtml = `
+                        <ellipse cx="65" cy="76" rx="10.5" ry="7" fill="#fdfaf6" />
+                        <circle cx="65" cy="77" r="5.8" fill="url(#iris-grad)" />
+                        <circle cx="65" cy="77" r="2.3" fill="#0c1a22" />
+                        <path d="M54,70 Q65,67 76,72" fill="none" stroke="#3a2a20" stroke-width="2.2" stroke-linecap="round" opacity="0.75" />`;
+                rightHtml = `
+                        <ellipse cx="135" cy="76" rx="10.5" ry="7" fill="#fdfaf6" />
+                        <circle cx="135" cy="77" r="5.8" fill="url(#iris-grad)" />
+                        <circle cx="135" cy="77" r="2.3" fill="#0c1a22" />
+                        <path d="M124,72 Q135,67 146,70" fill="none" stroke="#3a2a20" stroke-width="2.2" stroke-linecap="round" opacity="0.75" />`;
+            } else {
+                leftHtml = `
+                        <ellipse cx="65" cy="75" rx="11" ry="7.5" fill="#fdfaf6" />
+                        <circle id="left-eye" cx="65" cy="75" r="6" fill="url(#iris-grad)" class="robot-eye" />
+                        <circle cx="65" cy="75" r="2.4" fill="#0c1a22" />
+                        <circle cx="62.5" cy="72.5" r="1.4" fill="#ffffff" opacity="0.85" />`;
+                rightHtml = `
+                        <ellipse cx="135" cy="75" rx="11" ry="7.5" fill="#fdfaf6" />
+                        <circle id="right-eye" cx="135" cy="75" r="6" fill="url(#iris-grad)" class="robot-eye-right" />
+                        <circle cx="135" cy="75" r="2.4" fill="#0c1a22" />
+                        <circle cx="132.5" cy="72.5" r="1.4" fill="#ffffff" opacity="0.85" />`;
+            }
+
+            let brows = "";
+            if (expr === "thinking") {
+                brows += `
+                        <path d="M52,62 Q65,57 80,63" stroke="#3a2a20" stroke-width="2.2" stroke-linecap="round" fill="none" opacity="0.75" />
+                        <path d="M120,63 Q135,57 148,62" stroke="#3a2a20" stroke-width="2.2" stroke-linecap="round" fill="none" opacity="0.75" />
+                    `;
+            } else if (expr === "concerned") {
+                brows += `
+                        <path d="M53,64 Q65,60 79,67" stroke="#3a2a20" stroke-width="2.2" stroke-linecap="round" fill="none" opacity="0.75" />
+                        <path d="M121,67 Q135,60 147,64" stroke="#3a2a20" stroke-width="2.2" stroke-linecap="round" fill="none" opacity="0.75" />
+                    `;
+            } else {
+                brows += `
+                        <path d="M54,69 Q65,64 76,69" stroke="#3a2a20" stroke-width="1.8" stroke-linecap="round" fill="none" opacity="0.7" />
+                        <path d="M124,69 Q135,64 146,69" stroke="#3a2a20" stroke-width="1.8" stroke-linecap="round" fill="none" opacity="0.7" />
+                    `;
+            }
+
+            eyesGroup.innerHTML = `
+                    <g id="left-eye-group">${leftHtml}</g>
+                    <g id="right-eye-group">${rightHtml}</g>
+                    <g id="brows-and-lashes">${brows}</g>
+                `;
+        }
+
+        function setRobotState(state, expr) {
+            robotState = state;
+            expression = expr || expression;
+            const theme = THEME_COLORS[selectedLang.code] || THEME_COLORS.en;
+            statusLight.className = "w-1.5 h-1.5 rounded-full " + theme.lightClass;
+
+            if (state === "listening") {
+                statusLight.className = "w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_#10b981] animate-pulse";
+                statusText.className = "text-emerald-500";
+                statusText.textContent = "V-BOT LISTENING";
+                robotSvg.classList.remove("speaking");
+            } else if (state === "thinking") {
+                statusLight.className = "w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_6px_#f59e0b] animate-pulse";
+                statusText.className = "text-amber-500 font-bold";
+                statusText.textContent = "V-BOT THINKING";
+                robotSvg.classList.remove("speaking");
+            } else if (state === "speaking") {
+                statusLight.className = "w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_6px_#22d3ee] animate-pulse";
+                statusText.className = "text-cyan-400";
+                statusText.textContent = isPresenterMode ? "V-BOT PRESENTING" : "V-BOT SPEAKING";
+            } else {
+                statusLight.className = "w-1.5 h-1.5 rounded-full " + theme.lightClass;
+                statusText.className = theme.textClass;
+                statusText.textContent = "V-BOT STANDBY";
+                robotSvg.classList.remove("speaking");
+            }
+            applyThemeColors(selectedLang.code);
+        }
+
+        // ---------- RANDOM MOVEMENTS ----------
+        function triggerRandomMovement() {
+            if (isLimbAnimating) return;
+            isLimbAnimating = true;
+            const rIdx = Math.floor(Math.random() * 6);
+            const prevExpr = expression;
+            const prevState = robotState;
+
+            if (rIdx === 0) {
+                leftArm.classList.add("wave-left-arm");
+                setRobotState(prevState, "happy");
+                setTimeout(() => {
+                    leftArm.classList.remove("wave-left-arm");
+                    setRobotState(prevState, prevExpr);
+                    isLimbAnimating = false;
+                }, 1200);
+            } else if (rIdx === 1) {
+                rightArm.classList.add("wave-right-arm");
+                setRobotState(prevState, "happy");
+                setTimeout(() => {
+                    rightArm.classList.remove("wave-right-arm");
+                    setRobotState(prevState, prevExpr);
+                    isLimbAnimating = false;
+                }, 1200);
+            } else if (rIdx === 2) {
+                robotBody.classList.add("double-arm-jump-body");
+                leftArm.classList.add("double-arm-jump-left-arm");
+                rightArm.classList.add("double-arm-jump-right-arm");
+                leftLeg.classList.add("kick-left-leg");
+                rightLeg.classList.add("kick-right-leg");
+                setRobotState(prevState, "surprised");
+                setTimeout(() => {
+                    robotBody.classList.remove("double-arm-jump-body");
+                    leftArm.classList.remove("double-arm-jump-left-arm");
+                    rightArm.classList.remove("double-arm-jump-right-arm");
+                    leftLeg.classList.remove("kick-left-leg");
+                    rightLeg.classList.remove("kick-right-leg");
+                    setRobotState(prevState, prevExpr);
+                    isLimbAnimating = false;
+                }, 900);
+            } else if (rIdx === 3) {
+                leftLeg.classList.add("kick-left-leg");
+                setRobotState(prevState, "concerned");
+                setTimeout(() => {
+                    leftLeg.classList.remove("kick-left-leg");
+                    setRobotState(prevState, prevExpr);
+                    isLimbAnimating = false;
+                }, 700);
+            } else if (rIdx === 4) {
+                rightLeg.classList.add("kick-right-leg");
+                setRobotState(prevState, "concerned");
+                setTimeout(() => {
+                    rightLeg.classList.remove("kick-right-leg");
+                    setRobotState(prevState, prevExpr);
+                    isLimbAnimating = false;
+                }, 700);
+            } else {
+                robotBody.classList.add("happy-dance-body");
+                leftArm.classList.add("happy-dance-left-arm");
+                rightArm.classList.add("happy-dance-right-arm");
+                setRobotState(prevState, "happy");
+                setTimeout(() => {
+                    robotBody.classList.remove("happy-dance-body");
+                    leftArm.classList.remove("happy-dance-left-arm");
+                    rightArm.classList.remove("happy-dance-right-arm");
+                    setRobotState(prevState, prevExpr);
+                    isLimbAnimating = false;
+                }, 1200);
+            }
+        }
+
+        // ---------- DRAGGING ARMS ----------
+        let activeDragArm = null;
+
+        function initArmDragging() {
+            const leftArmEl = document.getElementById("robot-left-arm");
+            const rightArmEl = document.getElementById("robot-right-arm");
+            const robotSvgEl = document.getElementById("robot-svg");
+
+            function startDrag(e, side) {
+                e.stopPropagation();
+                e.preventDefault();
+                activeDragArm = side;
+                const el = side === "left" ? leftArmEl : rightArmEl;
+                el.classList.add("dragging");
+            }
+
+            leftArmEl.addEventListener("mousedown", (e) => startDrag(e, "left"));
+            leftArmEl.addEventListener("touchstart", (e) => startDrag(e, "left"), { passive: false });
+            rightArmEl.addEventListener("mousedown", (e) => startDrag(e, "right"));
+            rightArmEl.addEventListener("touchstart", (e) => startDrag(e, "right"), { passive: false });
+
+            window.addEventListener("mousemove", handleDragMove);
+            window.addEventListener("touchmove", handleDragMove, { passive: false });
+            window.addEventListener("mouseup", stopDrag);
+            window.addEventListener("touchend", stopDrag);
+
+            function handleDragMove(e) {
+                if (!activeDragArm) return;
+                e.preventDefault();
+                const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+                const clientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+                const svgRect = robotSvgEl.getBoundingClientRect();
+                const isLeft = activeDragArm === "left";
+                const originX = svgRect.left + (isLeft ? 48 : 152) / 200 * svgRect.width;
+                const originY = svgRect.top + 190 / 320 * svgRect.height;
+                const dx = clientX - originX;
+                const dy = clientY - originY;
+                const angleRad = Math.atan2(dx, dy);
+                const angleDeg = angleRad * (180 / Math.PI);
+                const el = isLeft ? leftArmEl : rightArmEl;
+                el.style.transform = `rotate(${angleDeg}deg)`;
+            }
+
+            function stopDrag() {
+                if (!activeDragArm) return;
+                const el = activeDragArm === "left" ? leftArmEl : rightArmEl;
+                el.classList.remove("dragging");
+                el.style.transform = "";
+                activeDragArm = null;
+            }
+        }
+        initArmDragging();
+    </script>
+</body>
+
+</html>

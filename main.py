@@ -1,45 +1,121 @@
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from pathlib import Path
 import os
-import json
-import re
 import sys
+import base64
+import edge_tts
+import re
+import json
 import datetime
 import time
 import math
 
-# Force UTF-8 encoding on standard streams to prevent UnicodeEncodeError on Windows console
-if hasattr(sys.stdout, 'reconfigure'):
-    try:
-        sys.stdout.reconfigure(encoding='utf-8')
-    except Exception:
-        pass
-if hasattr(sys.stderr, 'reconfigure'):
-    try:
-        sys.stderr.reconfigure(encoding='utf-8')
-    except Exception:
-        pass
+BASE_DIR = Path(__file__).resolve().parent
+app = FastAPI(title="Vihil Robot AI Voice Assistant Presenter")
 
-# ANSI Colors for Terminal
-class Colors:
-    HEADER = '\033[95m'
-    BLUE = '\033[94m'
-    CYAN = '\033[96m'
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    RED = '\033[91m'
-    ENDC = '\033[0m'
-    BOLD = '\033[1m'
-    UNDERLINE = '\033[4m'
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-def init_terminal():
-    """Enable virtual terminal processing on Windows for ANSI colors."""
-    if os.name == 'nt':
+# Global variables for cached TTS voices
+_cached_voices = None
+
+voice_map = {
+    "en": "en-US-AvaNeural",
+    "hi": "hi-IN-SwaraNeural",
+    "gu": "gu-IN-DhwaniNeural",
+    "es": "es-ES-ElviraNeural",
+    "fr": "fr-FR-DeniseNeural",
+    "de": "de-DE-KatjaNeural",
+    "ja": "ja-JP-NanamiNeural",
+    "zh": "zh-CN-XiaoxiaoNeural",
+    "ar": "ar-SA-AminaNeural",
+    "ru": "ru-RU-SvetlanaNeural",
+    "pt": "pt-PT-RaquelNeural"
+}
+
+def classify_expression(text: str) -> str:
+    text_lower = text.lower()
+    
+    # Happy triggers
+    happy_words = ["hello", "hi ", "hey ", "welcome", "namaste", "kem chho", "kaise ho", "thank", "glad", "delighted", "great", "awesome", "perfect", "good", "happy", "joy"]
+    if any(w in text_lower for w in happy_words):
+        return "happy"
+        
+    # Sad/Error triggers
+    sad_words = ["sorry", "unfortunately", "failed", "error", "limit", "rate limit", "cannot", "couldn't", "apologize", "offline"]
+    if any(w in text_lower for w in sad_words):
+        return "sad"
+        
+    # Surprised triggers (achievements, statistics)
+    surprised_words = ["csat", "4.8", "100+", "50+", "60+", "86%", "94%", "achieve", "deliver", "impressive", "outstanding"]
+    if any(w in text_lower for w in surprised_words):
+        return "surprised"
+        
+    # Thinking/Technical triggers
+    thinking_words = ["process", "research", "methodology", "next.js", "react", "fastapi", "python", "node", "typescript", "architecture", "sprint", "kanban", "method", "development"]
+    if any(w in text_lower for w in thinking_words):
+        return "thinking"
+        
+    # Concerned/Engagement triggers
+    concerned_words = ["contact", "email", "phone", "nda", "security", "cyber", "audit", "compliance", "book a call", "google meet", "zoom"]
+    if any(w in text_lower for w in concerned_words):
+        return "concerned"
+        
+    return "neutral"
+
+async def get_voice_for_lang(lang: str) -> str:
+    global _cached_voices
+    if not lang:
+        return "en-US-AvaNeural"
+    lang_prefix = lang.lower().split("-")[0]
+    
+    # 1. Check mapped presets
+    if lang_prefix in voice_map:
+        return voice_map[lang_prefix]
+        
+    # 2. Query edge-tts dynamically
+    if not _cached_voices:
         try:
-            import ctypes
-            kernel32 = ctypes.windll.kernel32
-            # ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
-            kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
-        except Exception:
-            pass
+            _cached_voices = await edge_tts.list_voices()
+        except Exception as err:
+            print("Error listing edge-tts voices:", err)
+            return "en-US-AvaNeural"
+            
+    # Search in edge-tts voices for a female voice matching the language prefix
+    for v in _cached_voices:
+        short_name = v["ShortName"].lower()
+        if short_name.startswith(f"{lang_prefix}-") and v.get("Gender") == "Female":
+            return v["ShortName"]
+            
+    # Search for any voice matching the language prefix
+    for v in _cached_voices:
+        short_name = v["ShortName"].lower()
+        if short_name.startswith(f"{lang_prefix}-"):
+            return v["ShortName"]
+            
+    return "en-US-AvaNeural"
+
+async def generate_speech_b64(text: str, lang: str) -> str:
+    try:
+        voice_name = await get_voice_for_lang(lang)
+        # edge-tts speed optimization
+        comm = edge_tts.Communicate(text, voice=voice_name, rate="+15%")
+        audio_data = b""
+        async for chunk in comm.stream():
+            if chunk["type"] == "audio":
+                audio_data += chunk["data"]
+        return base64.b64encode(audio_data).decode("utf-8")
+    except Exception as e:
+        print(f"edge-tts synthesis failed: {e}")
+        return ""
 
 def load_dotenv_custom(filepath=".env"):
     """Loads a .env file if it exists, putting variables into os.environ."""
@@ -61,15 +137,49 @@ def load_dotenv_custom(filepath=".env"):
 load_dotenv_custom()
 
 def load_knowledge_base(filepath="knowledge_base.json"):
-    """Load the crawled structured knowledge base."""
-    if not os.path.exists(filepath):
+    """Load the crawled structured knowledge base checking root and backend/."""
+    # Check current directory
+    if os.path.exists(filepath):
+        path = filepath
+    # Check backend directory
+    elif os.path.exists(os.path.join("backend", filepath)):
+        path = os.path.join("backend", filepath)
+    else:
         return {}
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
         print(f"Error loading knowledge base: {e}", file=sys.stderr)
         return {}
+
+HTML_CONTENT = ""
+html_file = BASE_DIR / "index_vbot.html"
+if html_file.exists():
+    try:
+        with open(html_file, "r", encoding="utf-8") as f:
+            HTML_CONTENT = f.read()
+    except Exception as e:
+        HTML_CONTENT = f"<h1>Error loading V-Bot UI: {e}</h1>"
+else:
+    # Check if index_vbot.html is in parent or relative directories
+    alt_paths = [
+        Path(__file__).resolve().parent / "index_vbot.html",
+        Path("index_vbot.html"),
+        Path("robot_voice_assistant") / "index_vbot.html"
+    ]
+    loaded = False
+    for path in alt_paths:
+        if path.exists():
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    HTML_CONTENT = f.read()
+                loaded = True
+                break
+            except Exception:
+                pass
+    if not loaded:
+        HTML_CONTENT = "<h1>V-Bot Assistant (index_vbot.html not found)</h1>"
 
 def prune_json(data):
     """Recursively removes large or useless metadata keys from JSON to shrink payload size."""
@@ -138,7 +248,6 @@ def build_search_index(kb):
     # 3. Company Statistics
     stats = kb.get("company", {}).get("statistics", [])
     if isinstance(stats, dict):
-        # New DB structure
         stats = stats.get("vihildetails", {})
         if stats:
             stats_str = f"Happy Clients: {stats.get('happyClients')}, Completed Projects: {stats.get('completedProjects')}, Rating: {stats.get('rating')}"
@@ -221,7 +330,7 @@ def build_search_index(kb):
             "answer": f"### ⚡ {name}\n*{desc}*"
         })
         
-    # 6b. AI / ML Capabilities (new section)
+    # 6b. AI / ML Capabilities
     ai_ml = kb.get("ai_ml", {})
     if ai_ml:
         caps = ai_ml.get("capabilities", [])
@@ -318,15 +427,10 @@ def build_search_index(kb):
     return index
 
 def compute_tfidf_score(query, docs):
-    """
-    Computes a highly accurate TF-IDF relevance score for each document against the query.
-    Supports title boosts, exact phrase matching, bigrams, and length normalization.
-    """
     query_tokens = [w for w in clean_and_tokenize(query)]
     if not query_tokens:
         return []
         
-    # Count document frequency (DF) for each term in the corpus
     df = {}
     total_docs = len(docs)
     for doc in docs:
@@ -334,11 +438,9 @@ def compute_tfidf_score(query, docs):
         for token in tokens:
             df[token] = df.get(token, 0) + 1
             
-    # Compute inverse document frequency (IDF) for each query term
     idf = {}
     for token in query_tokens:
         d_f = df.get(token, 0)
-        # Smoothed IDF
         idf[token] = math.log(1.0 + (total_docs - d_f + 0.5) / (d_f + 0.5))
         
     scored_docs = []
@@ -352,7 +454,6 @@ def compute_tfidf_score(query, docs):
         doc_tokens = clean_and_tokenize(doc["search_text"])
         doc_title_tokens = clean_and_tokenize(doc["title"])
         
-        # Term frequencies (TF) inside the document search_text
         tf = {}
         for token in doc_tokens:
             tf[token] = tf.get(token, 0) + 1
@@ -360,21 +461,17 @@ def compute_tfidf_score(query, docs):
         score = 0.0
         for token in query_tokens:
             if token in doc_tokens:
-                # Sublinear term frequency scaling
                 tf_val = 1.0 + math.log(tf[token])
                 score += tf_val * idf.get(token, 0.0)
                 
-            # Major boost if query term matches document title directly
             if token in doc_title_tokens:
                 score += 3.5 * idf.get(token, 0.0)
                 
-        # Phrase exact matching bonuses
         if query_lower in title:
             score += 15.0
         elif query_lower in search_text or query_lower in content:
             score += 7.0
         else:
-            # Partial N-gram match checks
             words = query_lower.split()
             if len(words) > 1:
                 for i in range(len(words) - 1):
@@ -384,93 +481,71 @@ def compute_tfidf_score(query, docs):
                     elif bigram in search_text or bigram in content:
                         score += 2.0
                         
-        # Length normalization (math.sqrt of document length)
         doc_len = len(doc_tokens) + len(doc_title_tokens) + 1.0
         normalized_score = score / math.sqrt(doc_len)
         
         scored_docs.append((normalized_score, doc))
         
-    # Sort by score descending
     scored_docs.sort(key=lambda x: x[0], reverse=True)
     return scored_docs
 
 def preprocess_multilingual_query(query):
-    """
-    Translates or maps non-English, Hindi, and Gujarati keywords/queries into standard English concepts
-    to allow the TF-IDF index to match correctly.
-    """
     q_lower = query.lower().strip()
     
-    # 1. Multi-lingual mappings (Hindi/Gujarati phonetics, Devanagari, and Gujarati script)
     translation_maps = {
-        # Contact / Location concepts
         "contact contacts phone email address location office number mobile": [
             "संपर्क", "सम्पर्क", "સંપર્ક", "contact", "number", "phone", "email", "address", "location", 
             "office", "headquarter", "nadiad", "gujarat", "india", "ફોન", "મોબાઈલ", "સરનામું", "ઈમેલ", 
             "કહા", "कहा", "कहाँ", "પતા", "पता", "નંબર", "नंबर", "फ़ोन"
         ],
-        # Services / Work concepts
         "service services work capability capabilities": [
             "सेवा", "સેવા", "काम", "કામ", "services", "offer", "do", "build", "develop", "make", "create", 
-            "બનાવો", "બનાવે", "बनाता", "બનાવતી"
+            "બનાવો", "બનાવે", "બનાવતા", "बनाता", "બનાવતી"
         ],
-        # Mobile app development
         "mobile app application android ios phone": [
             "मोबाइल", "મોબાઈલ", "app", "application", "android", "ios", "એપ", "ऐप", "phone app"
         ],
-        # Web development
         "web website site page": [
             "वेबसाइट", "વેબસાઈટ", "वेब", "વેબ", "website", "site", "page", "nextjs", "react"
         ],
-        # Team / Owner / CEO concepts
         "team member staff employee ceo cto owner founder boss bharat manish": [
             "टीम", "ટીમ", "ceo", "cto", "owner", "founder", "boss", "member", "staff", "employee", 
             "માલિક", "ભરત", "भरत", "મનીષ", "मनीष", "જેય", "जय"
         ],
-        # QA / Security
         "security cyber safe protect defense compliance audit": [
             "सुरक्षा", "સુરક્ષા", "cyber", "protect", "safe", "secure"
         ],
-        # Development Process
         "process step methodology workflow stage cycle": [
             "काम करने का तरीका", "પદ્ધતિ", "चरण", "पद्धति", "process", "step", "method", "workflow"
         ],
-        # AI / ML
         "ai ml artificial intelligence machine learning llm rag langchain copilot bot automation chatbot": [
             "ai", "ml", "artificial intelligence", "machine learning", "llm", "rag", "langchain", 
             "copilot", "bot", "automation", "generative", "chatbot", "smart", "intelligent", "bots"
         ],
-        # Cloud & Infrastructure
         "cloud devops aws gcp azure infrastructure server deployment hosting": [
             "cloud", "devops", "aws", "gcp", "azure", "infrastructure", "server", "deployment", "hosting"
         ],
-        # LinkedIn / Social
         "linkedin social instagram facebook profile follow": [
             "linkedin", "social", "instagram", "facebook", "profile", "follow"
         ],
-        # FAQ / Questions
         "faq faqs question questions answer query support common": [
             "faq", "faqs", "question", "questions", "answer", "support", "પ્રશ્ન", "સવાલ", "જવાબ", 
             "प्रश्न", "सवाल", "जवाब"
         ],
-        # Technology / Stack
         "technology tech stack languages database frontend backend framework tools": [
             "tech", "technology", "technologies", "stack", "ટેકનોલોજી", "ટેક", "तकनीक", "टेक्नोलॉजी", "टेक"
         ],
-        # Careers / Job
         "career careers job jobs vacancy vacancies hiring apply resume CV": [
             "career", "careers", "job", "jobs", "vacancy", "vacancies", "hiring", "apply", "resume", 
             "નોકરી", "ભરતી", "કારકિર્દી", "नौकरी", "भर्ती", "करियर"
         ],
-        # Portfolio / Testimonial
         "portfolio testimonial testimonials highlight highlights client clients rating review reviews": [
             "portfolio", "testimonial", "testimonials", "highlight", "highlights", "client", "clients", 
             "rating", "ratings", "review", "reviews", "પોર્ટફોલિયો", "ગ્રાહક", "રીવ્યુ", "पोर्टफोलियो", "ग्राहक", "रिव्यू"
         ],
-        # About / Company
         "about company vision mission history background": [
             "about", "company", "vision", "mission", "history", "background", "વિશે", "કંપની", "ધ્યેય", 
-            "વિઝન", "बारे", "कंपनी", "लक्ष्य", "विजन"
+            "વિઝન", "બારે", "कंपनी के बारे", "लक्ष्य", "विजन"
         ]
     }
     
@@ -481,7 +556,6 @@ def preprocess_multilingual_query(query):
                 expanded_terms.append(concept)
                 break
                 
-    # 2. English synonyms expansion for common questions
     synonyms = {
         "location address office nadiad gujarat india": ["where", "location", "address", "office", "city", "nadiad", "gujarat", "india", "place", "map", "situated", "located"],
         "ceo cto owner founder bharat manish": ["ceo", "cto", "owner", "founder", "head", "boss", "runs", "manage", "bharat", "manish", "desai", "shah"],
@@ -499,7 +573,6 @@ def preprocess_multilingual_query(query):
         if any(w in q_lower for w in keywords):
             expanded_terms.append(concept)
             
-    # 3. Spelling correction and expansion for team members' names to handle typos/variations (supports English, Gujarati, and Hindi)
     team_names_map = [
         (["hetvi", "shama", "sarma", "sharma", "હેત્વી", "હેતવી", "હતવી", "हेतवी", "हत्वी", "શર્મા", "શરમા", "शर्मा", "शमा"], "hetvi sharma"),
         (["manish", "manis", "મનીષ", "મનીસ", "मनीष", "मनिष", "શાહ", "शाह"], "manish shah"),
@@ -511,7 +584,6 @@ def preprocess_multilingual_query(query):
         (["bharat", "ભરત", "भरત", "દેસાઈ", "દેસાઇ", "देसाई"], "bharat desai")
     ]
     for aliases, full_name in team_names_map:
-        # Avoid \b word boundary bug for Indic/Unicode scripts
         if any(re.search(rf'(?:^|[^a-zA-Z0-9\u0A80-\u0AFF\u0900-\u097F]){re.escape(alias)}(?:$|[^a-zA-Z0-9\u0A80-\u0AFF\u0900-\u097F])', q_lower) for alias in aliases):
             expanded_terms.append(full_name)
             
@@ -523,19 +595,11 @@ def preprocess_multilingual_query(query):
     return query
 
 def contains_indic_scripts(text):
-    """
-    Checks if the text contains Gujarati or Hindi (Devanagari) characters.
-    """
     if not text:
         return False
     return bool(re.search(r'[\u0A80-\u0AFF\u0900-\u097F]', text))
 
 def translate_to_target_lang(text, target_lang):
-    """
-    Translates English text to the target language (e.g. 'gu' or 'hi')
-    using Google Translate's free API endpoint.
-    If it fails, returns the original text.
-    """
     if not target_lang or target_lang.lower() in ["en", "auto"]:
         return text
         
@@ -564,24 +628,16 @@ def translate_to_target_lang(text, target_lang):
         return text
 
 def fallback_qa(query, kb, lang_pref=None):
-    """
-    Advanced offline QA search engine.
-    Uses TF-IDF similarity vector matching across indexed facts for extreme precision.
-    Includes exact intent routing for conversational safety.
-    """
     if not kb:
         return "I am sorry, but the knowledge base is currently empty. Please trigger a crawl first using /sync."
         
     query_clean = query.lower().strip()
     
-    # Precise high-fidelity conversational routing to prevent unrelated vector matches
-    # 1. Greetings (supports English, Hindi, and Gujarati scripts/transliterations)
     greeting_patterns = [
         r'\bhello\b', r'\bhi\b', r'\bhey\b', r'\bgreetings\b', r'\bgood\s+morning\b', r'\bgood\s+afternoon\b', r'\bgood\s+evening\b',
         r'\bnamaste\b', r'\bnamaskar\b', r'\bpranam\b',
         r'નમસ્તે', r'પ્રણામ', r'नमस्ते', r'प्रणाम'
     ]
-    # 2. Identity & Name
     identity_patterns = [
         r'\bwho\s+are\s+you\b', r'\bwhat\s+is\s+your\s+name\b', r'\byour\s+name\b',
         r'\bwho\s+made\s+you\b', r'\bwho\s+created\s+you\b', r'\bwho\s+developed\s+you\b',
@@ -589,28 +645,24 @@ def fallback_qa(query, kb, lang_pref=None):
         r'\bkaun\s+ho\b', r'\btum\s+kaun\b', r'\btame\s+kon\b', r'\bnaam\s+kya\b', r'\bnaam\s+shu\b', r'\bapna\s+parichay\b', r'\btamaro\s+parichay\b',
         r'કોણ\s+છો', r'કોણ\s+છે', r'તમારું\s+નામ', r'નામ\s+શું', r'कौन\s+हो', r'आपका\s+नाम', r'नाम\s+क्या'
     ]
-    # 3. How are you
     how_are_you_patterns = [
         r'\bhow\s+are\s+you\b', r'\bhow\s+do\s+you\s+do\b', r'\bhope\s+you\s+are\s+well\b',
         r'\bhow\'s\s+it\s+going\b', r'\bdoing\s+well\b',
         r'\bkem\s+chho\b', r'\bkem\s+cho\b', r'\bkaise\s+ho\b', r'\bkaise\s+hain\b', r'\bkya\s+haal\b', r'\bshu\s+haal\b',
         r'કેમ\s+છો', r'કેમ\s+છે', r'કેવી\s+રીતે', r'कैसे\s+हो', r'कैसे\s+हैं', r'क्या\s+हाल'
     ]
-    # 4. Capabilities / What can you do
     capabilities_patterns = [
         r'\bwhat\s+do\s+you\s+do\b', r'\bwhat\s+can\s+you\s+do\b', r'\byour\s+capabilities\b',
         r'\bhow\s+can\s+you\s+help\b', r'\bhelp\s+me\b', r'\bwhat\s+are\s+you\s+capable\s+of\b',
         r'\bkam\s+kya\b', r'\bshu\s+kari\b', r'\bkya\s+kar\b', r'\bmadad\b', r'\bsahaya\b',
         r'શું\s+કરી\s+શકો', r'ક્ષમતા', r'મદદ', r'क्या\s+कर\s+सकते', r'मदद', r'सहायता'
     ]
-    # 5. Thanks / Gratitude
     thanks_patterns = [
         r'\bthank\s+you\b', r'\bthanks\b', r'\bappreciate\s+it\b', r'\bthankful\b',
         r'\bgreat\s+help\b', r'\bawesome\b', r'\bgood\s+job\b',
         r'\bdhanyavad\b', r'\bshukriya\b', r'\babhar\b', r'\bkhub\s+saras\b', r'\bbahut\s+achha\b',
         r'આભાર', r'ધન્યવાદ', r'ખુબ\s+સરસ', r'धन्यवाद', r'शुक्रिया', r'बहुत\s+बढ़िया'
     ]
-    # 6. Goodbye / Farewell
     goodbye_patterns = [
         r'\bbye\b', r'\bgoodbye\b', r'\bsee\s+you\b', r'\btalk\s+to\s+you\s+later\b',
         r'\bexit\b', r'\bquit\b',
@@ -618,7 +670,6 @@ def fallback_qa(query, kb, lang_pref=None):
         r'આવજો', r'ફરી\s+મળીશું', r'अलविदा', r'फिर\s+मिलेंगे'
     ]
 
-    # Handle language-specific offline responses
     if lang_pref == "gu":
         if any(re.search(pat, query_clean) for pat in greeting_patterns):
             return "નમસ્તે! હું વિહિલ ઇન્ફોટેક (Vihil InfoTech) નો AI આસિસ્ટન્ટ છું. હું તમારી શું મદદ કરી શકું?"
@@ -661,20 +712,15 @@ def fallback_qa(query, kb, lang_pref=None):
         if any(re.search(pat, query_clean) for pat in goodbye_patterns):
             return "अलविदा! बात करने के लिए धन्यवाद। आपका दिन शुभ हो!"
 
-    # Default English responses
-    # 1. Greetings
     if any(re.search(pat, query_clean) for pat in greeting_patterns):
         return "Hello! I am Vihil InfoTech's AI assistant. I have been trained on our official company context. How can I help you today?"
         
-    # 2. Identity & Name
     if any(re.search(pat, query_clean) for pat in identity_patterns):
         return "I am Vihil InfoTech's official AI assistant. I am programmed to help you explore our services, technical stacks, development process, team profiles, and office locations!"
 
-    # 3. How are you
     if any(re.search(pat, query_clean) for pat in how_are_you_patterns):
         return "I'm doing fantastic, thank you for asking! I'm completely ready to help you explore Vihil InfoTech's engineering offerings. What can I assist you with today?"
 
-    # 4. Capabilities / What can you do
     if any(re.search(pat, query_clean) for pat in capabilities_patterns):
         return (
             "I am Vihil InfoTech's AI assistant. Here's what I can help you with:\n"
@@ -686,15 +732,12 @@ def fallback_qa(query, kb, lang_pref=None):
             "Set a Groq API key with `/setkey <key>` to unlock full AI conversation mode!"
         )
 
-    # 5. Thanks / Gratitude
     if any(re.search(pat, query_clean) for pat in thanks_patterns):
         return "You're very welcome! Helping you is what I do best. Let me know if there's anything else about Vihil InfoTech you want to explore!"
 
-    # 6. Goodbye / Farewell
     if any(re.search(pat, query_clean) for pat in goodbye_patterns):
         return "Goodbye! Thank you for chatting. We hope to collaborate on your next big digital idea soon! Have an amazing day!"
 
-    # Precise high-importance triggers to override vector searches if needed with word boundaries
     ceo_patterns = [r'\bceo\b', r'\bfounder\b', r'\bhead\b', r'\bwho\s+runs\b', r'\bleader\b']
     if any(re.search(pat, query_clean) for pat in ceo_patterns):
         ceo = next((m for m in kb.get("team", []) if "ceo" in m.get("position", "").lower()), None)
@@ -707,7 +750,6 @@ def fallback_qa(query, kb, lang_pref=None):
         if cto:
             return f"The CTO of Vihil InfoTech is **{cto['name']}**. Under his profile: '{cto.get('desc', '')}'."
 
-    # ENFORCE STRICT CORE BUSINESS KEYWORD FILTERING TO AVOID UNRELATED HALLUCINATING MATCHES
     core_business_keywords = {
         "contact", "phone", "email", "address", "location", "office", "nadiad", "gujarat", "india",
         "service", "services", "web", "mobile", "app", "application", "desktop", "pwa", "chatbot",
@@ -719,20 +761,15 @@ def fallback_qa(query, kb, lang_pref=None):
         "process", "methodology", "workflow", "step", "planning", "research", "test", "testing", "optimize",
         "faq", "faqs", "question", "questions", "answer", "quote", "cost", "price", "portfolio", "carousel",
         "android", "ios", "react", "nextjs", "python", "fastapi", "node",
-        # New AI/ML terms
         "ai", "ml", "llm", "rag", "langchain", "cloud", "automation", "generative", "intelligence",
         "copilot", "assistant", "infrastructure", "devops", "shopify", "typescript",
         "linkedin", "instagram", "facebook", "social"
     }
     
-    # Preprocess and expand the query to support multiple languages and synonyms
     expanded_query = preprocess_multilingual_query(query)
-    
-    # Tokenize the original and expanded queries to check for core keywords
     original_tokens = clean_and_tokenize(query)
     expanded_tokens = clean_and_tokenize(expanded_query)
     
-    # Check if the query has at least some relevance to Vihil/Infotech or contains core business keywords
     is_relevant_topic = (
         any(w in core_business_keywords for w in expanded_tokens) 
         or "vihil" in query_clean 
@@ -746,7 +783,6 @@ def fallback_qa(query, kb, lang_pref=None):
     )
     
     if not is_relevant_topic and original_tokens:
-        # If the question contains no company name and no business keywords, fail early to prevent wrong answers
         return (
             "I am Vihil InfoTech's AI Assistant. I operate on a local cached knowledge base facts when the Live API is disconnected. "
             "I couldn't find a highly-relevant match for your query in our local site cache.\n\n"
@@ -759,7 +795,6 @@ def fallback_qa(query, kb, lang_pref=None):
     index = build_search_index(kb)
     results = compute_tfidf_score(expanded_query, index)
     
-    # Increase threshold to 0.35 to prevent random single word mismatches from returning illogical results
     if results and results[0][0] > 0.35:
         best_score, best_doc = results[0]
         return best_doc["answer"]
@@ -774,19 +809,12 @@ def fallback_qa(query, kb, lang_pref=None):
     )
 
 def detect_language_from_text(text):
-    """
-    Detects language (gu, hi, or en) from the query text.
-    Checks for both Unicode ranges and common Romanized/transliterated words.
-    """
     text_clean = text.lower().strip()
-    
-    # 1. Check Unicode character ranges first (extremely reliable)
     if re.search(r'[\u0A80-\u0AFF]', text):
         return "gu"
     if re.search(r'[\u0900-\u097F]', text):
         return "hi"
         
-    # 2. Check Romanized Gujarati phrases
     romanized_gu = [
         r'\bkem\s+chho\b', r'\bkem\s+cho\b', r'\bgujarati\s+ma\b', r'\bgujrati\s+ma\b',
         r'\btame\s+kem\s+chho\b', r'\bvaat\s+karo\b', r'\bshu\s+chhe\b', r'\bshu\s+che\b',
@@ -795,7 +823,6 @@ def detect_language_from_text(text):
     if any(re.search(pat, text_clean) for pat in romanized_gu):
         return "gu"
         
-    # 3. Check Romanized Hindi phrases
     romanized_hi = [
         r'\bkaise\s+ho\b', r'\bkya\s+haal\b', r'\bhindi\s+me\b', r'\bbaat\s+karo\b',
         r'\bkaise\s+hain\b', r'\bhindi\s+me\s+bolo\b'
@@ -806,50 +833,24 @@ def detect_language_from_text(text):
     return "en"
 
 def check_language_switch_request(query):
-    """
-    Checks if the user is explicitly requesting to switch the conversational language.
-    Returns the target language code (e.g. 'gu', 'hi', 'en') if a match is found, else None.
-    """
     q_clean = query.lower().strip()
     
-    # Gujarati requests
     gujarati_patterns = [
-        r'\bspeak\s+in\s+gujarati\b',
-        r'\btalk\s+in\s+gujarati\b',
-        r'\bgujarati\s+ma\s+bolo\b',
-        r'\bgujarati\s+ma\s+vaat\b',
-        r'\bgujrati\s+ma\s+bolo\b',
-        r'\bgujrati\s+ma\s+vaat\b',
-        r'\bgujarati\s+bolo\b',
-        r'\bgujrati\s+bolo\b',
-        r'ગુજરાતી\s*માં',
-        r'ગુજરાતી\s*બોલો',
-        r'ગુજરાતી\s*માં\s*વાત',
-        r'\bkem\s+chho\b',
-        r'\bkem\s+cho\b'
+        r'\bspeak\s+in\s+gujarati\b', r'\btalk\s+in\s+gujarati\b', r'\bgujarati\s+ma\s+bolo\b',
+        r'\bgujarati\s+ma\s+vaat\b', r'\bgujrati\s+ma\s+bolo\b', r'\bgujrati\s+ma\s+vaat\b',
+        r'\bgujarati\s+bolo\b', r'\bgujrati\s+bolo\b', r'ગુજરાતી\s*માં', r'ગુજરાતી\s*બોલો',
+        r'ગુજરાતી\s*માં\s*વાત', r'\bkem\s+chho\b', r'\bkem\s+cho\b'
     ]
     
-    # Hindi requests
     hindi_patterns = [
-        r'\bspeak\s+in\s+hindi\b',
-        r'\btalk\s+in\s+hindi\b',
-        r'\bhindi\s+me\s+bolo\b',
-        r'\bhindi\s+me\s+baat\b',
-        r'\bhindi\s+bolo\b',
-        r'हिंदी\s*में',
-        r'हिंदी\s*बोलो',
-        r'हिंदी\s*में\s*बात',
-        r'हिन्दी\s*में',
-        r'हिन्दी\s*बोलो'
+        r'\bspeak\s+in\s+hindi\b', r'\btalk\s+in\s+hindi\b', r'\bhindi\s+me\s+bolo\b',
+        r'\bhindi\s+me\s+baat\b', r'\bhindi\s+bolo\b', r'हिंदी\s*में', r'हिंदी\s*बोलो',
+        r'हिंदी\s*में\s*बात', r'हिन्दी\s*में', r'हिन्दी\s*બોલો'
     ]
     
-    # English requests
     english_patterns = [
-        r'\bspeak\s+in\s+english\b',
-        r'\btalk\s+in\s+english\b',
-        r'\benglish\s+me\s+bolo\b',
-        r'\benglish\s+me\s+baat\b',
-        r'\benglish\s+please\b'
+        r'\bspeak\s+in\s+english\b', r'\btalk\s+in\s+english\b', r'\benglish\s+me\s+bolo\b',
+        r'\benglish\s+me\s+baat\b', r'\benglish\s+please\b'
     ]
     
     if any(re.search(pat, q_clean) for pat in gujarati_patterns):
@@ -862,9 +863,6 @@ def check_language_switch_request(query):
     return None
 
 def is_pure_language_switch(query):
-    """
-    Determines if the query is just a language switch trigger/command.
-    """
     q_clean = query.lower().strip()
     phrases = [
         "speak in gujarati", "talk in gujarati", "gujarati ma bolo", "gujarati ma vaat karo", "gujarati bolo",
@@ -883,7 +881,6 @@ def is_pure_language_switch(query):
     return False
 
 def detect_language_simple(text):
-    """Simple heuristic to detect Gujarati, Hindi/Devanagari, or default to English."""
     if re.search(r'[\u0A80-\u0AFF]', text):
         return "gu"
     if re.search(r'[\u0900-\u097F]', text):
@@ -901,17 +898,10 @@ def detect_language_simple(text):
     return "en"
 
 def check_navigation_intent(query: str):
-    """
-    Checks if the user wants to navigate to a page.
-    Supports English, Hindi, and Gujarati navigation triggers.
-    Returns the relative route if a match is found, else None.
-    """
     if not query:
         return None
-        
     q = query.lower().strip()
     
-    # 1. Services Page Mapping
     services_keywords = [
         "service", "services", "what do you offer", "what you offer", "capabilities",
         "सेवाओं", "सेवाएं", "सर्विसेज", "કામ", "સેવા", "સેવાઓ", "સર્વિસ"
@@ -919,7 +909,6 @@ def check_navigation_intent(query: str):
     if any(word in q for word in services_keywords) and any(action in q for action in ["go", "open", "show", "navigate", "page", "ખોલો", "જાવ", "દેખાડો", "દિખાઓ", "જાઓ"]):
         return "/our-services"
         
-    # 2. Career Page Mapping
     career_keywords = [
         "career", "careers", "job", "jobs", "vacancy", "vacancies", "hiring", "apply", "work with us", "resume",
         "करियर", "नौकरी", "भर्ती", "રોજગાર", "નોકરી", "ભરતી", "કરિયર"
@@ -927,7 +916,6 @@ def check_navigation_intent(query: str):
     if any(word in q for word in career_keywords):
         return "/career"
         
-    # 3. Contact Page Mapping
     contact_keywords = [
         "contact", "phone", "email", "address", "location", "reach us", "get in touch", "office", "headquarter",
         "संपर्क", "कांटेक्ट", "सम्पર્ક", "કોન્ટેક્ટ"
@@ -935,7 +923,6 @@ def check_navigation_intent(query: str):
     if any(word in q for word in contact_keywords) and any(action in q for action in ["go", "open", "show", "navigate", "page", "ખોલો", "જાવ", "દેખાડો", "દિખાઓ", "જાઓ"]):
         return "/contact-us"
         
-    # 4. FAQ Page Mapping
     faq_keywords = [
         "faq", "faqs", "question", "questions", "queries", "common questions",
         "સવાલ", "પ્રશ્ન", "सवाल", "प्रश्न"
@@ -943,7 +930,6 @@ def check_navigation_intent(query: str):
     if any(word in q for word in faq_keywords) and any(action in q for action in ["go", "open", "show", "navigate", "page", "ખોલો", "જાવ", "દેખાડો", "દિખાઓ", "જાઓ"]):
         return "/faq"
         
-    # 5. How We Work Mapping
     how_we_work_keywords = [
         "how we work", "how you work", "methodology", "process", "workflow", "steps",
         "પદ્ધતિ", "કામ કરવાની પદ્ધતિ", "काम करने की पद्धति", "तरीका"
@@ -951,7 +937,6 @@ def check_navigation_intent(query: str):
     if any(word in q for word in how_we_work_keywords) and any(action in q for action in ["go", "open", "show", "navigate", "page", "ખોલો", "જાવ", "દેખાડો", "દિખાઓ", "જાઓ"]):
         return "/how-we-work"
         
-    # 6. Who We Are Mapping
     who_we_are_keywords = [
         "who we are", "who you are", "about company", "about us", "about vihil",
         "વિશે", "કંપની વિશે", "બારે", "कंपनी के बारे"
@@ -959,7 +944,6 @@ def check_navigation_intent(query: str):
     if any(word in q for word in who_we_are_keywords) and any(action in q for action in ["go", "open", "show", "navigate", "page", "ખોલો", "જાવ", "દેખાડો", "દિખાઓ", "જાઓ"]):
         return "/who-we-are"
         
-    # 7. Schedule a Call Mapping
     schedule_keywords = [
         "schedule", "book", "meeting", "google meet", "zoom", "call", "schedule a call", "book a call", "appointment",
         "બુક", "મીટિંગ", "કોલ", "अपॉइंटमेंट", "कॉल बुक", "कॉल शेड्यूल"
@@ -967,7 +951,6 @@ def check_navigation_intent(query: str):
     if any(word in q for word in schedule_keywords) and any(action in q for action in ["go", "open", "show", "navigate", "page", "ખોલો", "જાવ", "દેખાડો", "દિખાઓ", "જાઓ"]):
         return "/schedule-a-call"
         
-    # 8. Home Page Mapping
     home_keywords = [
         "home", "homepage", "main page", "start page",
         "હોમ", "मुख्य पेज"
@@ -978,10 +961,6 @@ def check_navigation_intent(query: str):
     return None
 
 def query_groq_api(query, kb, api_key, stream=False, lang_pref=None):
-    """
-    Direct REST API client for Groq to support Llama 3 models.
-    Uses standard urllib to bypass extra library requirements.
-    """
     import urllib.request
     import json
     import ssl
@@ -1016,17 +995,17 @@ def query_groq_api(query, kb, api_key, stream=False, lang_pref=None):
         "  * Dhruvil Mistry: FullStack Developer\n\n"
         "Guidelines:\n"
         "- Be professional, insightful, and warm.\n"
-        "- CRITICAL TEAM MEMBER RULE: Always refer to team members using their exact roles from the provided context. Specifically, Hetvi Sharma is a Junior Frontend Developer and Krupal Valand is a Software Developer. Under no circumstances should you claim they are founders, CEO, COO, or have any other roles. Hetvi Sharma is NOT an actress. If a query has spelling variations or typos of our team members' names (like 'Hetvi Shama' or 'Krupel'), match them to the corresponding team member in the context and answer about them as a Vihil InfoTech team member.\n"
+        "- CRITICAL TEAM MEMBER RULE: Always refer to team members using their exact roles from the provided context. Specifically, Hetvi Sharma is a Junior Frontend Developer and Krupal Valand is a Software Developer. Under no circumstances should you claim they are founders, CEO, COO, or have any other roles. Hetvi Sharma is NOT an actress. If a query has spelling variations or typos of our team members' names, match them to the corresponding team member in the context and answer about them as a Vihil InfoTech team member.\n"
         "- CRITICAL LANGUAGE RULE: You MUST reply in the exact same language the user writes in. If the user asks in English, reply in English. Do NOT default to Hindi just because the company is in India.\n"
         "- ALWAYS format responses clearly line-by-line with Markdown bullet points or numbered lists. NEVER combine multiple items into a single paragraph.\n"
         "- If the user asks for team members, services, or FAQs, YOU MUST list each one clearly with bullet points.\n"
-        "- For company questions not covered by the context, politely guide them to contact vihil3010@gmail.com or call +91 7016421339.\n"
+        "- For company questions not covered by the context, guide them to contact vihil3010@gmail.com or call +91 7016421339.\n"
         "- For completely off-topic questions (math, general chat), answer helpfully as a smart AI and tie back to how Vihil InfoTech can help build digital solutions.\n"
         "- NAVIGATION INTENT RULE: If the user explicitly asks to navigate, go to, show, or open a specific page on the website (e.g. Services, Contact, Careers, FAQ, About/Who we are, Schedule a call, Process/How we work, Home), you must identify the target route from these options and return it in the 'redirect' field of the JSON (e.g. '/our-services', '/contact-us', '/career', '/faq', '/who-we-are', '/schedule-a-call', '/how-we-work', '/home'). If no navigation is requested by the user, set 'redirect' to null.\n"
     )
     
     if lang_pref and lang_pref.lower() != "auto":
-        system_instruction += f"\n- VERY IMPORTANT: The user has explicitly selected the language code '{lang_pref}'. You MUST bypass the English default and respond entirely in this requested language."
+        system_instruction += f"\n- VERY IMPORTANT: The user has explicitly selected the language code '{lang_pref}'. You MUST respond entirely in this requested language."
         
     if not stream:
         system_instruction += (
@@ -1040,12 +1019,10 @@ def query_groq_api(query, kb, api_key, stream=False, lang_pref=None):
         
     current_time = datetime.datetime.now().strftime("%I:%M %p")
     
-    # Use RAG (Retrieval-Augmented Generation) to avoid Groq rate limits
     index = build_search_index(kb)
     expanded_query = preprocess_multilingual_query(query)
     results = compute_tfidf_score(expanded_query, index)
     
-    # Inject the top 15 most relevant documents so it can list all team members/services without cutting off
     top_docs = results[:15] if results else []
     context_lines = []
     for score, doc in top_docs:
@@ -1063,7 +1040,7 @@ def query_groq_api(query, kb, api_key, stream=False, lang_pref=None):
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0"
     }
     
     body = {
@@ -1100,11 +1077,9 @@ def answer_query(query, filepath="knowledge_base.json", lang_pref=None):
     kb = load_knowledge_base(filepath)
     groq_api_key = os.environ.get("GROQ_API_KEY")
     
-    # 1. Detect language switch requests or detect language from text
     requested_lang = check_language_switch_request(query)
     if requested_lang:
         lang_pref = requested_lang
-        # If it is a pure language switch command, return immediate confirmation
         if is_pure_language_switch(query):
             if requested_lang == "gu":
                 return "હા, હવે હું તમારી સાથે ગુજરાતીમાં વાત કરીશ. હું ગુજરાતીમાં બોલી શકું છું! હું તમારી શું મદદ કરી શકું?", "gu", None
@@ -1117,7 +1092,6 @@ def answer_query(query, filepath="knowledge_base.json", lang_pref=None):
         if detected_lang != "en":
             lang_pref = detected_lang
             
-    # 2. Try Groq API first if available
     if groq_api_key:
         try:
             req, ctx = query_groq_api(query, kb, groq_api_key, stream=False, lang_pref=lang_pref)
@@ -1149,322 +1123,119 @@ def answer_query(query, filepath="knowledge_base.json", lang_pref=None):
     redirect = check_navigation_intent(query)
     return ans, final_lang, redirect
 
-def stream_answer_query(query, filepath="knowledge_base.json", lang_pref=None):
-    """
-    Generator that yields chunks of the answer.
-    Enables highly responsive real-time streaming in the terminal and browser.
-    Supports Groq or local search fallback.
-    """
-    import urllib.request
-    import json
-    load_dotenv_custom()
-    kb = load_knowledge_base(filepath)
-    groq_api_key = os.environ.get("GROQ_API_KEY")
+class VoiceQueryRequest(BaseModel):
+    query: str
+    lang: str = "en"
+
+@app.post("/api/voice-query")
+async def api_voice_query(request: VoiceQueryRequest):
+    if not request.query.strip():
+        raise HTTPException(status_code=400, detail="Query cannot be empty.")
     
-    # 1. Detect language switch requests or detect language from text
-    requested_lang = check_language_switch_request(query)
-    if requested_lang:
-        lang_pref = requested_lang
-        # If it is a pure language switch command, yield immediate confirmation and return
-        if is_pure_language_switch(query):
-            if requested_lang == "gu":
-                yield "હા, હવે હું તમારી સાથે ગુજરાતીમાં વાત કરીશ. હું ગુજરાતીમાં બોલી શકું છું! હું તમારી શું મદદ કરી શકું?"
-            elif requested_lang == "hi":
-                yield "हाँ, अब मैं आपसे हिंदी में बात करूँगा। मैं हिंदी में बोल सकता हूँ! मैं आपकी क्या मदद कर सकता हूँ?"
-            elif requested_lang == "en":
-                yield "Sure, I will speak with you in English now! How can I help you today?"
-            return
-    elif not lang_pref or lang_pref.lower() == "auto":
-        detected_lang = detect_language_from_text(query)
-        if detected_lang != "en":
-            lang_pref = detected_lang
-            
-    # 2. Try Groq API first if available
-    if groq_api_key:
-        try:
-            req, ctx = query_groq_api(query, kb, groq_api_key, stream=True, lang_pref=lang_pref)
-            with urllib.request.urlopen(req, timeout=15, context=ctx) as response:
-                buffer = ""
-                for chunk in response:
-                    buffer += chunk.decode("utf-8", errors="ignore")
-                    while "\n" in buffer:
-                        line, buffer = buffer.split("\n", 1)
-                        line = line.strip()
-                        if not line:
-                            continue
-                        if line.startswith("data:"):
-                            data_content = line[5:].strip()
-                            if data_content == "[DONE]":
-                                break
-                            try:
-                                json_data = json.loads(data_content)
-                                delta = json_data["choices"][0]["delta"]
-                                if "content" in delta:
-                                    yield delta["content"]
-                            except Exception:
-                                pass
-            return
-        except Exception as e:
-            if "429" in str(e):
-                yield "⚠️ **Groq API Rate Limit Reached**\nYou have sent too many requests and hit the free-tier limit for the Groq API. Please wait a moment for the rate limit to reset before trying again, or use a new Groq API key."
-                return
-            print(f"Groq Stream Error: {e}", file=sys.stderr)
-            
-    ans = fallback_qa(query, kb, lang_pref=lang_pref)
-    if lang_pref and lang_pref.lower() not in ["en", "auto"]:
-        if not contains_indic_scripts(ans):
-            ans = translate_to_target_lang(ans, lang_pref)
-    words = ans.split(" ")
-    for i, word in enumerate(words):
-        yield (word + " " if i < len(words) - 1 else word)
-        time.sleep(0.015)
-
-def show_spinner_animation(duration=2.0, message="Thinking"):
-    """Shows a beautiful micro-animation spinner in the terminal."""
-    spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-    start_time = time.time()
-    idx = 0
-    while time.time() - start_time < duration:
-        char = spinner_chars[idx % len(spinner_chars)]
-        sys.stdout.write(f"\r{Colors.CYAN}{char}{Colors.ENDC} {message}...")
-        sys.stdout.flush()
-        time.sleep(0.08)
-        idx += 1
-    sys.stdout.write("\r" + " " * (len(message) + 15) + "\r")
-    sys.stdout.flush()
-
-def run_live_crawl(filepath="knowledge_base.json"):
-    """Runs scraper in background and prints live console updates."""
-    print(f"\n{Colors.BOLD}{Colors.CYAN}=== SYNCING KNOWLEDGE BASE FROM LIVE WEBSITE ==={Colors.ENDC}")
-    show_spinner_animation(1.0, "Connecting to www.vihilinfotech.com")
     try:
-        import scraper
-        kb = scraper.scrape_vihil()
-        if kb:
-            print(f"{Colors.GREEN}✔ Knowledge base successfully updated and saved to {filepath}.{Colors.ENDC}\n")
-        else:
-            print(f"{Colors.RED}✘ Crawl returned empty database. Check connection.{Colors.ENDC}\n")
+        # 1. Coordinate query using the chatbot's RAG/Groq search
+        ans, detected_lang, redirect = answer_query(request.query, filepath="knowledge_base.json", lang_pref=request.lang)
+        
+        # 2. Dynamically classify the robot expression state
+        expression = classify_expression(ans)
+        
+        # 3. Clean markdown formatting for clean vocal speech output
+        clean_speech = ans.replace("*", "").replace("#", "").replace("_", "")
+        
+        # 4. Generate base64 audio response via edge-tts
+        audio_b64 = await generate_speech_b64(clean_speech, detected_lang)
+        
+        return {
+            "text": ans,
+            "audio": audio_b64,
+            "expression": expression,
+            "redirect": redirect
+        }
+        
     except Exception as e:
-        print(f"{Colors.RED}✘ Sync failed: {e}{Colors.ENDC}\n")
+        raise HTTPException(status_code=500, detail=str(e))
 
-def set_api_key(key):
-    """Saves API key to .env file and reloads it."""
-    key = key.strip()
-    if not key:
-        print(f"{Colors.RED}Error: API key cannot be empty.{Colors.ENDC}")
-        return
-        
-    lines = []
-    found_groq = False
-    env_path = ".env"
-    
-    key_var = "GROQ_API_KEY"
-    
-    if os.path.exists(env_path):
-        with open(env_path, "r", encoding="utf-8") as f:
-            for line in f:
-                if line.strip().startswith(f"{key_var}="):
-                    lines.append(f"{key_var}={key}\n")
-                    found_groq = True
-                else:
-                    lines.append(line)
-                    
-    if not found_groq:
-        lines.append(f"GROQ_API_KEY={key}\n")
-        
-    with open(env_path, "w", encoding="utf-8") as f:
-        f.writelines(lines)
-        
-    os.environ[key_var] = key
-    print(f"\n{Colors.GREEN}✔ API key successfully configured and saved to .env!{Colors.ENDC}")
-    print(f"{Colors.GREEN}AI assistant is now upgraded to Live Groq Mode.{Colors.ENDC}\n")
 
-def print_status(filepath="knowledge_base.json"):
-    kb = load_knowledge_base(filepath)
-    groq_api_key = os.environ.get("GROQ_API_KEY")
-    
-    if groq_api_key:
-        api_status = f"{Colors.GREEN}CONNECTED (Groq Llama-3.1-8b-instant){Colors.ENDC}"
-    else:
-        api_status = f"{Colors.YELLOW}OFFLINE MODE (Local TF-IDF Vector Search Engine){Colors.ENDC}"
-    
-    services_count = len(kb.get("services", []))
-    team_count = len(kb.get("team", []))
-    faqs_count = len(kb.get("faqs", []))
-    process_count = len([p for p in kb.get("process", []) if p.get("content")])
-    techs_count = len(kb.get("technologies", []))
-    ai_caps_count = len(kb.get("ai_ml", {}).get("capabilities", []))
-    
-    cur_time = datetime.datetime.now().strftime("%Y-%m-%d %I:%M:%S %p")
-    
-    print(f"\n{Colors.BOLD}{Colors.BLUE}=== SYSTEM STATUS ==={Colors.ENDC}")
-    print(f"- **AI Power Status**: {api_status}")
-    print(f"- **Loaded Knowledge Base**: {Colors.CYAN}{filepath}{Colors.ENDC}")
-    print(f"  - Core Services: {services_count}")
-    print(f"  - Team Members: {team_count}")
-    print(f"  - Frequently Asked Qs: {faqs_count}")
-    print(f"  - Process Steps: {process_count}")
-    print(f"  - Tech Stack Items: {techs_count}")
-    print(f"  - AI/ML Capabilities: {ai_caps_count}")
-    print(f"- **Current Local Time**: {cur_time}")
-    print(f"=====================\n")
+INTROS = {
+    "en": "Hello! Welcome to Vihil Infotech. I am your virtual host, and I am thrilled to introduce you to our company. At Vihil Infotech, we specialize in high-performance web development, mobile applications, and cloud systems, with a strong focus on cutting-edge AI and machine learning integrations. Whether you are a startup looking to launch your first MVP, or an established enterprise seeking digital transformation, our team of dedicated tech experts is here to turn your vision into scalable, secure reality. Thank you for visiting us, and we look forward to building something extraordinary together.",
+    "hi": "नमस्ते! विहिल इन्फोटेक में आपका स्वागत है। मैं आपकी वर्चुअल होस्ट हूँ, और मुझे हमारी कंपनी का परिचय देने में बेहद खुशी हो रही है। विहिल इन्फोटेक में, हम हाई-परफॉर्मेंस वेब डेवलपमेंट, मोबाइल ऐप्स और क्लाउड सॉल्यूशंस में विशेषज्ञता रखते हैं, जिसमें आर्टिफिशियल इंटेलिजेंस और मशीन लर्निंग का विशेष फोकस है। चाहे आप एक नया स्टार्टअप हों जो अपना पहला MVP लॉन्च करना चाहते हैं, या एक स्थापित उद्यम जो डिजिटल परिवर्तन की तलाश में हैं, हमारे समर्पित तकनीकी विशेषज्ञों की टीम आपकी दृष्टि को स्केलेबल और सुरक्षित वास्तविकता में बदलने के लिए यहाँ है। हमसे मिलने के लिए धन्यवाद, और हम आपके साथ मिलकर कुछ असाधारण बनाने की उम्मीद करते हैं।",
+    "gu": "નમસ્તે! વિહિલ ઇન્ફોટેકમાં આપનું સ્વાગત છે. હું તમારી વર્ચ્યુઅલ હોસ્ટ છું, અને મને અમારી કંપનીનો પરિચય આપતા ખૂબ જ આનંદ થાય છે. વિહિલ ઇન્ફોટેકમાં, અમે આર્ટિફિશિયલ ઇન્ટેલિજન્સ અને મશીન લર્નિંગના વિશેષ ફોકસ સાથે હાઇ-પર્ફોર્મન્સ વેબ ડેવલપમેન્ટ, મોબાઇલ એપ્લિકેશન્સ અને ક્લાઉડ સિસ્ટમ્સમાં નિપુણતા ધરાવીએ છીએ. ભલે તમે તમારો પ્રથમ MVP લોન્ચ કરવા માંગતા સ્ટાર્ટઅપ હોવ, અથવા ડિજિટલ ટ્રાન્સફોર્મેશન શોધી રહેલા સ્થાપિત એન્ટરપ્રાઇઝ હોવ, અમારી સમર્પિત ટેક નિષ્ણાતોની ટીમ તમારી દ્રષ્ટિને સ્કેલેબલ, સુરક્ષિત વાસ્તવિકતામાં બદલવા માટે અહીં છે. અમારી મુલાકાત લેવા બદલ આભાર, અને અમે સાથે મળીને કંઈક અસાધારણ બનાવવા માટે ઉત્સુક છીએ。"
+}
 
-def view_category(category, filepath="knowledge_base.json"):
-    kb = load_knowledge_base(filepath)
-    category = category.lower().strip()
-    
-    if category == "services":
-        services = kb.get("services", [])
-        if not services:
-            print("No services found.")
-            return
-        print(f"\n{Colors.BOLD}{Colors.CYAN}=== CORE SERVICES ==={Colors.ENDC}")
-        for i, s in enumerate(services, 1):
-            title = s.get('title', '').strip()
-            clean_title = re.sub(r'^[0-9\.\s]+', '', title)
-            print(f"{Colors.BOLD}{i}. {clean_title}{Colors.ENDC}")
-            print(f"   {s.get('desc1') or s.get('desc')}\n")
-            
-    elif category == "team":
-        team = kb.get("team", [])
-        if not team:
-            print("No team members found.")
-            return
-        print(f"\n{Colors.BOLD}{Colors.CYAN}=== VIHIL INFOTECH TEAM ==={Colors.ENDC}")
-        for i, m in enumerate(team, 1):
-            pos = m.get('position', '').replace('(', '').replace(')', '').strip()
-            print(f"{Colors.BOLD}{i}. {m.get('name')} - {Colors.YELLOW}{pos}{Colors.ENDC}")
-            if m.get('desc'):
-                print(f"   Role: {m.get('desc')}")
-            print()
-            
-    elif category == "faqs":
-        faqs = kb.get("faqs", [])
-        if not faqs:
-            print("No FAQs found.")
-            return
-        print(f"\n{Colors.BOLD}{Colors.CYAN}=== FREQUENTLY ASKED QUESTIONS ==={Colors.ENDC}")
-        for i, f in enumerate(faqs, 1):
-            print(f"{Colors.BOLD}Q{i}: {f.get('question')}{Colors.ENDC}")
-            print(f"A:  {f.get('answer')}\n")
-            
-    elif category == "tech" or category == "technologies":
-        techs = kb.get("technologies", [])
-        if not techs:
-            print("No technologies indexed.")
-            return
-        print(f"\n{Colors.BOLD}{Colors.CYAN}=== SPECIALIZED TECHNOLOGIES ==={Colors.ENDC}")
-        print(", ".join([f"{Colors.BOLD}{t}{Colors.ENDC}" for t in techs]) + "\n")
-    else:
-        print(f"{Colors.RED}Unknown category: {category}. Choose 'services', 'team', 'faqs', or 'tech'.{Colors.ENDC}")
+HTML_CONTENT = ""
+html_file = BASE_DIR / "index_vbot.html"
+if html_file.exists():
+    try:
+        with open(html_file, "r", encoding="utf-8") as f:
+            HTML_CONTENT = f.read()
+    except Exception as e:
+        HTML_CONTENT = f"<h1>Error loading V-Bot UI: {e}</h1>"
+else:
+    # Check if index_vbot.html is in parent or relative directories
+    alt_paths = [
+        Path(__file__).resolve().parent / "index_vbot.html",
+        Path("index_vbot.html"),
+        Path("robot_voice_assistant") / "index_vbot.html"
+    ]
+    loaded = False
+    for path in alt_paths:
+        if path.exists():
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    HTML_CONTENT = f.read()
+                loaded = True
+                break
+            except Exception:
+                pass
+    if not loaded:
+        HTML_CONTENT = "<h1>V-Bot Assistant (index_vbot.html not found)</h1>" 
 
-def print_help():
-    print(f"\n{Colors.BOLD}{Colors.CYAN}=== AVAILABLE COMMANDS ==={Colors.ENDC}")
-    print(f"  {Colors.BOLD}/help{Colors.ENDC}             - Show this help menu.")
-    print(f"  {Colors.BOLD}/status{Colors.ENDC}           - Display AI configurations & database stats.")
-    print(f"  {Colors.BOLD}/sync{Colors.ENDC}             - Crawl & refresh local database from live website.")
-    print(f"  {Colors.BOLD}/setkey <key>{Colors.ENDC}     - Save Groq API key to .env file for Live Mode.")
-    print(f"  {Colors.BOLD}/view <cat>{Colors.ENDC}       - View lists ('services', 'team', 'faqs', 'tech').")
-    print(f"  {Colors.BOLD}/clear{Colors.ENDC}            - Clear the terminal screen.")
-    print(f"  {Colors.BOLD}/exit{Colors.ENDC} or {Colors.BOLD}/quit{Colors.ENDC}    - Exit the interactive assistant.")
-    print(f"==========================\n")
-
-def run_terminal_client(filepath="knowledge_base.json"):
-    init_terminal()
-    load_dotenv_custom()
-    
-    banner = f"""{Colors.BOLD}{Colors.CYAN}
-===================================================
-     __   ___ _    _ _    _          ___  _    
-     \\ \\ / (_) |__(_) |  / \\  _   _ |  _|| |   
-      \\ V /| | '_ \\ | | / _ \\| | | || |_ | |   
-       \\ / | | | | | | |/ ___ \\ |_| ||  _|| |__ 
-        V  |_|_| |_|_|_/_/   \\_\\__,_||_|  |____|
-                                               
-           ★  AI ASSISTANT TERMINAL  ★
-===================================================
-{Colors.ENDC}"""
-    print(banner)
-    
-    kb = load_knowledge_base(filepath)
-    if not kb:
-        print(f"{Colors.YELLOW}Warning: 'knowledge_base.json' not found or empty!{Colors.ENDC}")
-        print(f"Please run {Colors.BOLD}/sync{Colors.ENDC} inside this terminal to crawl the website and build it.\n")
-    
-    print_status(filepath)
-    print(f"Type a question to ask the AI, or {Colors.BOLD}/help{Colors.ENDC} to see commands.")
-    print("-" * 50)
-    
-    while True:
+@app.get("/", response_class=HTMLResponse)
+def read_index():
+    # Dynamically read index_vbot.html for instant reflection of frontend changes
+    html_file = BASE_DIR / "index_vbot.html"
+    if html_file.exists():
         try:
-            prompt_str = f"{Colors.BOLD}{Colors.GREEN}vihil-ai > {Colors.ENDC}"
-            user_input = input(prompt_str).strip()
-            
-            if not user_input:
-                continue
-                
-            if user_input.startswith("/"):
-                parts = user_input.split(" ", 1)
-                cmd = parts[0].lower()
-                arg = parts[1] if len(parts) > 1 else ""
-                
-                if cmd in ["/exit", "/quit"]:
-                    print(f"\n{Colors.BOLD}{Colors.BLUE}Thank you for chatting with Vihil InfoTech AI! Goodbye.{Colors.ENDC}\n")
-                    break
-                elif cmd == "/help":
-                    print_help()
-                elif cmd == "/status":
-                    print_status(filepath)
-                elif cmd == "/clear":
-                    os.system('cls' if os.name == 'nt' else 'clear')
-                elif cmd == "/sync":
-                    run_live_crawl(filepath)
-                elif cmd == "/setkey":
-                    set_api_key(arg)
-                elif cmd == "/view":
-                    if not arg:
-                        print(f"{Colors.RED}Please specify a category: /view services, /view team, /view faqs, or /view tech{Colors.ENDC}")
-                    else:
-                        view_category(arg, filepath)
-                else:
-                    print(f"{Colors.RED}Unknown command: {cmd}. Type /help for assistance.{Colors.ENDC}")
-                continue
-                
-            # Regular question answering with streaming
-            groq_api_key = os.environ.get("GROQ_API_KEY")
-            if groq_api_key:
-                engine_label = "Groq Llama-3"
-            else:
-                engine_label = "Local TF-IDF Search"
-            
-            sys.stdout.write(f"\n{Colors.BOLD}{Colors.BLUE}[AI ({engine_label}) is thinking...]{Colors.ENDC}\n")
-            sys.stdout.flush()
-            
-            show_spinner_animation(0.4, "Searching database")
-            
-            sys.stdout.write(f"{Colors.CYAN}")
-            sys.stdout.flush()
-            
-            # Call streaming generator
-            for chunk in stream_answer_query(user_input, filepath):
-                sys.stdout.write(chunk)
-                sys.stdout.flush()
-                
-            sys.stdout.write(f"{Colors.ENDC}\n")
-            print("-" * 50 + "\n")
-            
-        except KeyboardInterrupt:
-            print(f"\n\n{Colors.YELLOW}Session interrupted. Type /exit to quit.{Colors.ENDC}\n")
-        except EOFError:
-            print(f"\n\n{Colors.BOLD}{Colors.BLUE}Goodbye!{Colors.ENDC}\n")
-            break
+            with open(html_file, "r", encoding="utf-8") as f:
+                return f.read()
         except Exception as e:
-            print(f"\n{Colors.RED}An error occurred: {e}{Colors.ENDC}\n")
+            return f"<h1>Error loading V-Bot UI: {e}</h1>"
+    return HTML_CONTENT
+
+@app.post("/api/tts")
+async def get_tts(request: dict):
+    lang = request.get("lang", "en")
+    text = request.get("text", INTROS.get(lang, INTROS["en"]))
+    voice = await get_voice_for_lang(lang)
+    
+    try:
+        communicate = edge_tts.Communicate(text, voice)
+        audio_data = bytearray()
+        subtitles = []
+        
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                audio_data.extend(chunk["data"])
+            elif chunk["type"] == "SentenceBoundary":
+                start = chunk['offset'] / 10000000.0
+                duration = chunk['duration'] / 10000000.0
+                end = start + duration
+                subtitles.append({
+                    "text": chunk["text"],
+                    "start": start,
+                    "end": end
+                })
+        
+        audio_base64 = base64.b64encode(audio_data).decode("utf-8")
+        return {
+            "audio": f"data:audio/mp3;base64,{audio_base64}",
+            "subtitles": subtitles
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        q = " ".join(sys.argv[1:])
-        ans, lang = answer_query(q)
-        print(ans)
-    else:
-        run_terminal_client()
+    import uvicorn
+    port = int(os.environ.get("PORT", 8001))
+    print(f"Launching Self-Contained Vihil Animated Presenter on http://127.0.0.1:{port}")
+    uvicorn.run("main:app", host="127.0.0.1", port=port, reload=True)
